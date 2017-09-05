@@ -279,4 +279,75 @@ test$yhat <- predict(tree.divvy, newdata = test)
 graph
 ```
 
+### Bagging and Random Forest
+
+```{r}
+combi <- rbind(train, test)
+train <- combi[1:1284,]
+test <- combi[1285:1465,]
+```
+
+Instead of using decision trees, we can use many trees to predict the usage. Bagging model is a special case of random forest when we use all the features available.
+
+```{r}
+set.seed(11)
+bag.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry=9, importance=TRUE)
+```
+
+Let's see how we did.
+
+```{r}
+sqrt(mean((predict(bag.divvy, newdata = test) - test$Trips)^2))
+```
+
+We did a little better than decision tree, but it is still less accurate than linear regression.
+
+```{r}
+test$yhat <- predict(bag.divvy, newdata = test)
+graph
+```
+
+Now we use random forest. The default is using square root of features in this case 3.
+
+```{r}
+rf.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry=3, importance=TRUE)
+importance(rf.divvy)
+varImpPlot(rf.divvy)
+```
+
+Okay, temperature is the most important variable.
+
+```{r}
+sqrt(mean((predict(rf.divvy, newdata = test) - test$Trips)^2))
+```
+
+We have done a little better.
+
+```{r}
+test$yhat <- predict(rf.divvy, newdata = test)
+graph
+```
+
+### Boosting
+
+Lastly, we use gradient boosting model.
+
+```{r}
+set.seed(11)
+boost.divvy <- gbm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, distribution="gaussian", n.trees=5000, interaction.depth=4)
+summary(boost.divvy)
+```
+
+RMSE
+
+```{r}
+sqrt(mean((predict(boost.divvy, newdata = test,n.trees=5000) - test$Trips)^2))
+```
+
+graph
+
+```{r}
+test$yhat <- predict(boost.divvy, newdata = test, n.trees=5000)
+graph
+```
 
