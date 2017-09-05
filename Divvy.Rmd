@@ -29,8 +29,6 @@ library(gbm)
 ```
 
 ## Importing Data
- 
-### Training
 
 First I will combine all the trips dataset into one data frame. Divvy trips for 2013 is imported separately since it is formatted somewhat differently. Birthday variable is renamed as birthyear as it is birthyear in all other datasets. We convert starttime and stoptime into date format.
  
@@ -79,6 +77,9 @@ trips <- rbind(trips_2013, trips, trips_2016_Q3Q4)
 
 Now, in order to get the usage value, we have to first group the number of trips taken by date. There are two options available for date to sum over - start time and stop time. There are 'r trips$starttime != trips$stoptime' instances where start time are different from the stop time. Since this is comparatively small percentage, we will use start time to sum together trips.
 
+## Exploratory Data Analysis
+
+Let's shed more light into what is driving the Divvy usage. First, I will define usage to be the number of trips taken per day.
 
 ```{r}
 names(trips)[names(trips) == "starttime"] <- "Date"
@@ -88,9 +89,150 @@ byday <- trips %>%
 ggplot(byday, aes(Date, Trips)) + geom_line()
 ```
 
+The graph shows strong seasonal pattern of usage. I will create a variable called quarter to account for this pattern when predicting.
+
+```{r}
+byday$Quarter <- 1
+byday$Quarter[month(byday$Date) %in% 4:6] <- 2
+byday$Quarter[month(byday$Date) %in% 7:9] <- 3
+byday$Quarter[month(byday$Date) %in% 10:12] <- 4
+byday$Quarter <- as.factor(byday$Quarter)
+```
+
+
+I will compute day of the week variable to see the shorter usage pattern.
+
 ```{r}
 byday <- byday %>% 
   mutate(Wday = wday(Date, label = TRUE))
 ggplot(byday, aes(Wday, Trips)) + geom_boxplot()
 ```
+
+It seems like usage during week days are little higher than usage during weekends. This pattern is more pronounced when usage is divided between different user types.
+
+```{r}
+trips[trips$usertype == "Dependent",]$usertype <- "Subscriber"
+byday2 <- trips %>% 
+  group_by(Date, usertype) %>% 
+  summarise(Trips = n()) %>% 
+  mutate(Wday = wday(Date, label = TRUE))
+ggplot(byday2, aes(Wday, Trips, color = usertype)) + geom_boxplot()
+```
+
+Now, let's take a look at weather data.
+
+```{r}
+weather <- read_csv("chicagoweather.csv")
+weather$Date <- as_date(dmy(weather$Date))
+weather$Precipitation[weather$Precipitation == "T"] <- 0
+weather$Precipitation <- as.numeric(weather$Precipitation)
+weather[which(is.na(weather$Events)),]$Events <- "None"
+weather$Events <- as.factor(weather$Events)
+levels(weather$Events)
+weather$Events <- gsub("Fog|Fog\\r\\t,\\rRain|Rain", "Rain", weather$Events)
+weather$Events <- gsub("Fog\\r\\t,\\rRain\\r\\t,\\rSnow|Fog\\r\\t,\\rSnow|Rain\\r\\t,\\rSnow|Snow", "Snow", weather$Events)
+weather$Events <- gsub("Fog\\r\\t,\\rRain\\r\\t,\\rThunderstorm|Rain\\r\\t,\\rHail\\r\\t,\\rThunderstorm|Rain\\r\\t,\\rThunderstorm|Thunderstorm", "Thunderstorm", weather$Events)
+weather$Events <- as.factor(weather$Events)
+levels(weather$Events)
+```
+
+Now we are ready to merge and create our training dataset!
+
+```{r}
+train <- weather %>% 
+  left_join(byday, by = "Date")
+```
+
+There are few missing values in our training data set. These are from the days when there were no trips, so we will input the adequate values accordingly.
+
+```{r}
+train[which(is.na(train$Trips)),]
+which(is.na(train$Trips))
+train[195, "Wday"] <- "Tues"
+train[196, "Wday"] <- "Wed"
+train[which(is.na(train$Quarter)),]$Quarter <- 1
+train[which(is.na(train$Trips)),]$Trips <- 0
+```
+
+## Test
+
+Now we do the same transformation to trips and weather data for 2017 to create our testing set.
+
+```{r}
+weather_2017 <- read_csv("chicagoweather2017.csv")
+weather_2017$Date <- as_date(dmy(weather_2017$Date))
+weather_2017[which(is.na(weather_2017$Precipitation)),]$Precipitation <- 0
+weather_2017$Precipitation <- as.numeric(weather_2017$Precipitation)
+weather_2017[which(is.na(weather_2017$Events)),]$Events <- "None"
+weather_2017$Events <- as.factor(weather_2017$Events)
+levels(weather_2017$Events)
+weather_2017$Events <- gsub("Fog|Fog , Rain|Rain", "Rain", weather_2017$Events)
+weather_2017$Events <- gsub("Fog , Rain , Snow|Fog , Snow|Rain , Snow|Snow", "Snow", weather_2017$Events)
+weather_2017$Events <- gsub("Fog , Rain , Thunderstorm|Fog , Snow , Thunderstorm|Rain , Hail , Thunderstorm|Rain , Thunderstorm|Thunderstorm|Snow , Thunderstorm", "Thunderstorm", weather_2017$Events)
+weather_2017$Events <- as.factor(weather_2017$Events)
+levels(weather_2017$Events)
+
+trips_2017_Q1 <- read_csv("Divvy_Trips_2017_Q1.csv")
+trips_2017_Q2 <- read_csv("Divvy_Trips_2017_Q2.csv")
+trips_2017 <- rbind(trips_2017_Q1, trips_2017_Q2)
+
+trips_2017$Date <- as_date(mdy_hms(trips_2017$start_time))
+byday3 <- trips_2017 %>% 
+  group_by(Date) %>% 
+  summarise(Trips = n()) %>% 
+  mutate(Wday = wday(Date, label = TRUE))
+
+byday3$Quarter <- 1
+byday3$Quarter[month(byday3$Date) %in% 4:6] <- 2
+byday3$Quarter[month(byday3$Date) %in% 7:9] <- 3
+byday3$Quarter[month(byday3$Date) %in% 10:12] <- 4
+byday3$Quarter <- as.factor(byday3$Quarter)
+levels(byday3$Quarter) <- levels(byday3$Quarter)
+
+test <- weather_2017 %>% 
+  left_join(byday3, by = "Date")
+```
+
+## Model
+
+### Linear Regression
+
+I will first use linear regression as a starting point and a benchmark.
+
+```{r}
+lm.fit <- lm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
+summary(lm.fit)
+```
+
+The model has found temperature, sea level pressure, wind, precipitation, rain, thunderstorm, and quarter2 to be significant. The model has R-squared of 0.6451 which means 64.51% of the trips are explained by this data. So, how did our model do in terms of prediction? 
+
+```{r}
+sqrt(mean((test$Trips - predict(lm.fit, test))^2))
+```
+
+The linear model has a root mean squared error(RMSE) of 2583.261. I have used RMSE for a metric to evaluate the prediction accuracy. Now let's plot the predicted value along with the actual value. 
+
+```{r}
+test$yhat <- predict(lm.fit, test)
+graph <- ggplot(test) + 
+  geom_line(aes(Date, Trips)) +
+  geom_point(aes(Date, yhat))
+graph
+```
+
+We might want to have an interaction term between variables wday and quarter as it might be more reasonable to assume that usage differ by weekdays for different quarters and vice versa. 
+
+```{r}
+lm.fit2 <- lm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
+summary(lm.fit2)
+```
+
+Calculating the RMSE of the second model.
+
+```{r}
+sqrt(mean((test$Trips - predict(lm.fit2, test))^2))
+```
+
+We did a little better in terms of the prediction.
+
 
