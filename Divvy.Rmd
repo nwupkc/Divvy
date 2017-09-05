@@ -32,7 +32,7 @@ library(gbm)
  
 ### Training
 
-First we import Divvy trips for 2013 since it is formatted somewhat differently.We rename birthday variable as birthyear as it is birthyear in all other datasets. We convert starttime and stoptime into date format.
+First I will combine all the trips dataset into one data frame. Divvy trips for 2013 is imported separately since it is formatted somewhat differently. Birthday variable is renamed as birthyear as it is birthyear in all other datasets. We convert starttime and stoptime into date format.
  
 ```{r}
 trips_2013 <- read_csv("Divvy_Trips_2013.csv")
@@ -82,13 +82,15 @@ Now, in order to get the usage value, we have to first group the number of trips
 
 ```{r}
 names(trips)[names(trips) == "starttime"] <- "Date"
-daily <- trips %>%
+byday <- trips %>%
   group_by(Date) %>% 
   summarise(Trips = n())
-ggplot(daily, aes(Date, Trips)) + geom_line()
+ggplot(byday, aes(Date, Trips)) + geom_line()
+```
 
-daily <- daily %>% 
+```{r}
+byday <- byday %>% 
   mutate(Wday = wday(Date, label = TRUE))
-ggplot(daily, aes(Wday, Trips)) + geom_boxplot()
+ggplot(byday, aes(Wday, Trips)) + geom_boxplot()
 ```
 
