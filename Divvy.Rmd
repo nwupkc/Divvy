@@ -233,6 +233,50 @@ Calculating the RMSE of the second model.
 sqrt(mean((test$Trips - predict(lm.fit2, test))^2))
 ```
 
-We did a little better in terms of the prediction.
+We did a little better in terms of the prediction. Now, let's see if using all the features is the right way to run the regression. There might be issue of multicollinearity between weather variables as they are likely to be highly correlated.
+
+```{r}
+regfit.full <- regsubsets(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
+reg.summary <- summary(regfit.full)
+reg.summary$rsq
+par(mfrow=c(2,2))
+plot(reg.summary$rss,xlab="Number of Variables",ylab="RSS",type="l")
+plot(reg.summary$adjr2,xlab="Number of Variables",ylab="Adjusted RSq",type="l")
+which.max(reg.summary$adjr2)
+plot(reg.summary$cp,xlab="Number of Variables",ylab="Cp",type="l")
+which.min(reg.summary$cp)
+plot(reg.summary$bic,xlab="Number of Variables",ylab="BIC",type="l")
+which.min(reg.summary$bic)
+```
+
+It seems like using all 8 regressors is the right way to go.
+
+### Decision Tree
+
+Next, we will use decision tree to predict the usage.
+
+```{r}
+set.seed(11)
+tree.divvy <- tree(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
+summary(tree.divvy)
+par(mfrow=c(1, 1))
+plot(tree.divvy)
+text(tree.divvy, pretty = 0)
+cv.divvy <- cv.tree(tree.divvy)
+plot(cv.divvy$size, cv.divvy$dev, type='b')
+```
+
+How did we do in terms of prediction?
+
+```{r}
+sqrt(mean((predict(tree.divvy, newdata = test) - test$Trips)^2))
+```
+
+We actually did worse than linear model. We can reconcile this issue with using ensemble modeling. Before we move on, let's take a look at the predicted value.
+
+```{r}
+test$yhat <- predict(tree.divvy, newdata = test)
+graph
+```
 
 
