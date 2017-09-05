@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introduction
 
-This is a prediction of bicycle sharing usage in the city of Chicago for first half of 2017 using data from 2013 to 2016.
+This is a prediction of bicycle sharing usage in the city of Chicago. I have defined the usage as the number of trips taken per day. I will use historical datasets from 2013 to 2016 to predict the usage for the first half of 2017.
 
 
 ## Loading Necessary Packages
@@ -77,19 +77,18 @@ trips_2016_Q3Q4$stoptime <- as_date(mdy_hms(trips_2016_Q3Q4$stoptime))
 trips <- rbind(trips_2013, trips, trips_2016_Q3Q4)
 ```
 
+Now, in order to get the usage value, we have to first group the number of trips taken by date. There are two options available for date to sum over - start time and stop time. There are 'r trips$starttime != trips$stoptime' instances where start time are different from the stop time. Since this is comparatively small percentage, we will use start time to sum together trips.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
+```{r}
+names(trips)[names(trips) == "starttime"] <- "Date"
+daily <- trips %>%
+  group_by(Date) %>% 
+  summarise(Trips = n())
+ggplot(daily, aes(Date, Trips)) + geom_line()
+
+daily <- daily %>% 
+  mutate(Wday = wday(Date, label = TRUE))
+ggplot(daily, aes(Wday, Trips)) + geom_boxplot()
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
