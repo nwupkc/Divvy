@@ -13,187 +13,68 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introduction
 
-This is a prediction of bicycle sharing usage in the city of Chicago. I have defined the usage as the number of trips taken per day. I will use historical datasets from 2013 to 2016 to predict the usage for the first half of 2017.
+This is a prediction of bicycle sharing usage in the city of Chicago. I have defined the usage as the number of trips taken per day. I will use historical trips and weather datasets from 2014 to 2016 to predict the usage for the first half of 2017. I have decided to exclude trips data from 2013 as the number of rides during summer months are noticeably low as Divvy just started out its service in the Windy City making the prediction less accurate.
 
 
-## Loading Necessary Packages
+## Load Data
 
-```{r}
-library(tidyverse)
-library(lubridate)
-library(leaps)
-library(tree)
-library(randomForest)
-library(party)
-library(gbm)
+```{r packages, results = 'hide'}
+# Load packages
+library('tidyverse')
+library('lubridate')
+library('leaps')
+library('tree')
+library('randomForest')
+library('gbm')
 ```
 
-## Importing Data
-
-First I will combine all the trips dataset into one data frame. Divvy trips for 2013 is imported separately since it is formatted somewhat differently. Birthday variable is renamed as birthyear as it is birthyear in all other datasets. We convert starttime and stoptime into date format.
- 
-```{r}
-trips_2013 <- read_csv("Divvy_Trips_2013.csv")
-names(trips_2013)[names(trips_2013) == "birthday"] <- "birthyear"
-trips_2013$starttime <- as_date(trips_2013$starttime)
-trips_2013$stoptime <- as_date(trips_2013$stoptime)
-```
-
-Again, we import other datsets excluding quarter 3 and 4 in 2016 since the starttime and stoptime is formatted differently. We combine these datasets using row bind and convert dates.
+To jump right into the Exploratory Data Analysis and Feature Engineering, I have written detailed data preparation at the end.
 
 ```{r}
-trips_2014_Q1Q2 <- read_csv("Divvy_Trips_2014_Q1Q2.csv")
-trips_2014_Q3_07 <- read_csv("Divvy_Trips_2014-Q3-07.csv")
-trips_2014_Q3_0809 <- read_csv("Divvy_Trips_2014-Q3-0809.csv")
-trips_2014_Q4 <- read_csv("Divvy_Trips_2014-Q4.csv")
-trips_2015_Q1 <- read_csv("Divvy_Trips_2015-Q1.csv")
-trips_2015_Q2 <- read_csv("Divvy_Trips_2015-Q2.csv")
-trips_2015_Q3_07 <- read_csv("Divvy_Trips_2015_07.csv")
-trips_2015_Q3_08 <- read_csv("Divvy_Trips_2015_08.csv")
-trips_2015_Q3_09 <- read_csv("Divvy_Trips_2015_09.csv")
-trips_2015_Q4 <- read_csv("Divvy_Trips_2015_Q4.csv")
-trips_2016_Q1 <- read_csv("Divvy_Trips_2016_Q1.csv")
-trips_2016_Q2_04 <- read_csv("Divvy_Trips_2016_04.csv")
-trips_2016_Q2_05 <- read_csv("Divvy_Trips_2016_05.csv")
-trips_2016_Q2_06 <- read_csv("Divvy_Trips_2016_06.csv")
-trips <- rbind(trips_2014_Q1Q2, trips_2014_Q3_07, trips_2014_Q3_0809, trips_2014_Q4, 
-               trips_2015_Q1, trips_2015_Q2, trips_2015_Q3_07, trips_2015_Q3_08,
-               trips_2015_Q3_09, trips_2015_Q4, trips_2016_Q1, trips_2016_Q2_04,
-               trips_2016_Q2_05, trips_2016_Q2_06)
-trips$starttime <- as_date(mdy_hm(trips$starttime))
-trips$stoptime <- as_date(mdy_hm(trips$stoptime))
+train <- read_csv("train.csv")
+test <- read_csv("test.csv")
+
+str(train)
 ```
 
-Lastly, we do appropriate date conversion for Q3 and Q4 and combined all together into one data frame.
-
-```{r}
-trips_2016_Q3 <- read_csv("Divvy_Trips_2016_Q3.csv")
-trips_2016_Q4 <- read_csv("Divvy_Trips_2016_Q4.csv")
-trips_2016_Q3Q4 <- rbind(trips_2016_Q3, trips_2016_Q4)
-trips_2016_Q3Q4$starttime <- as_date(mdy_hms(trips_2016_Q3Q4$starttime))
-trips_2016_Q3Q4$stoptime <- as_date(mdy_hms(trips_2016_Q3Q4$stoptime))
-trips <- rbind(trips_2013, trips, trips_2016_Q3Q4)
-```
-
-Now, in order to get the usage value, we have to first group the number of trips taken by date. There are two options available for date to sum over - start time and stop time. There are 'r trips$starttime != trips$stoptime' instances where start time are different from the stop time. Since this is comparatively small percentage, we will use start time to sum together trips.
-
-## Exploratory Data Analysis
+## Feature Engineering
 
 Let's shed more light into what is driving the Divvy usage. First, I will define usage to be the number of trips taken per day.
 
 ```{r}
-names(trips)[names(trips) == "starttime"] <- "Date"
-byday <- trips %>%
-  group_by(Date) %>% 
-  summarise(Trips = n())
-ggplot(byday, aes(Date, Trips)) + geom_line()
+ggplot(train, aes(Date, Trips)) + geom_line()
 ```
 
-The graph shows strong seasonal pattern of usage. I will create a variable called quarter to account for this pattern when predicting.
+The graph shows strong seasonal pattern. I will create a variable called quarter so that our models can capture this pattern when predicting.
 
 ```{r}
-byday$Quarter <- 1
-byday$Quarter[month(byday$Date) %in% 4:6] <- 2
-byday$Quarter[month(byday$Date) %in% 7:9] <- 3
-byday$Quarter[month(byday$Date) %in% 10:12] <- 4
-byday$Quarter <- as.factor(byday$Quarter)
+train$Quarter <- 1
+train$Quarter[month(train$Date) %in% 4:6] <- 2
+train$Quarter[month(train$Date) %in% 7:9] <- 3
+train$Quarter[month(train$Date) %in% 10:12] <- 4
+train$Quarter <- as.factor(train$Quarter)
 ```
 
-
-I will compute day of the week variable to see the shorter usage pattern.
+I will create day of the week variable to see the shorter usage pattern.
 
 ```{r}
-byday <- byday %>% 
+train <- train %>% 
   mutate(Wday = wday(Date, label = TRUE))
-ggplot(byday, aes(Wday, Trips)) + geom_boxplot()
+ggplot(train, aes(Wday, Trips)) + geom_boxplot()
 ```
 
-It seems like usage during week days are little higher than usage during weekends. This pattern is more pronounced when usage is divided between different user types.
+It seems like usage during week days are little higher than usage during weekends.
 
 ```{r}
-trips[trips$usertype == "Dependent",]$usertype <- "Subscriber"
-byday2 <- trips %>% 
-  group_by(Date, usertype) %>% 
-  summarise(Trips = n()) %>% 
-  mutate(Wday = wday(Date, label = TRUE))
-ggplot(byday2, aes(Wday, Trips, color = usertype)) + geom_boxplot()
+# First we'll look at the relationship between quarter & wday
+ggplot(train, aes(wday, fill = Trips)) + 
+  geom_histogram() + 
+  # I include Sex since we know (a priori) it's a significant predictor
+  facet_grid(.~quarter) + 
+  theme_few()
 ```
 
-Now, let's take a look at weather data.
-
-```{r}
-weather <- read_csv("chicagoweather.csv")
-weather$Date <- as_date(dmy(weather$Date))
-weather$Precipitation[weather$Precipitation == "T"] <- 0
-weather$Precipitation <- as.numeric(weather$Precipitation)
-weather[which(is.na(weather$Events)),]$Events <- "None"
-weather$Events <- as.factor(weather$Events)
-levels(weather$Events)
-weather$Events <- gsub("Fog|Fog\\r\\t,\\rRain|Rain", "Rain", weather$Events)
-weather$Events <- gsub("Fog\\r\\t,\\rRain\\r\\t,\\rSnow|Fog\\r\\t,\\rSnow|Rain\\r\\t,\\rSnow|Snow", "Snow", weather$Events)
-weather$Events <- gsub("Fog\\r\\t,\\rRain\\r\\t,\\rThunderstorm|Rain\\r\\t,\\rHail\\r\\t,\\rThunderstorm|Rain\\r\\t,\\rThunderstorm|Thunderstorm", "Thunderstorm", weather$Events)
-weather$Events <- as.factor(weather$Events)
-levels(weather$Events)
-```
-
-Now we are ready to merge and create our training dataset!
-
-```{r}
-train <- weather %>% 
-  left_join(byday, by = "Date")
-```
-
-There are few missing values in our training data set. These are from the days when there were no trips, so we will input the adequate values accordingly.
-
-```{r}
-train[which(is.na(train$Trips)),]
-which(is.na(train$Trips))
-train[195, "Wday"] <- "Tues"
-train[196, "Wday"] <- "Wed"
-train[which(is.na(train$Quarter)),]$Quarter <- 1
-train[which(is.na(train$Trips)),]$Trips <- 0
-```
-
-## Test
-
-Now we do the same transformation to trips and weather data for 2017 to create our testing set.
-
-```{r}
-weather_2017 <- read_csv("chicagoweather2017.csv")
-weather_2017$Date <- as_date(dmy(weather_2017$Date))
-weather_2017[which(is.na(weather_2017$Precipitation)),]$Precipitation <- 0
-weather_2017$Precipitation <- as.numeric(weather_2017$Precipitation)
-weather_2017[which(is.na(weather_2017$Events)),]$Events <- "None"
-weather_2017$Events <- as.factor(weather_2017$Events)
-levels(weather_2017$Events)
-weather_2017$Events <- gsub("Fog|Fog , Rain|Rain", "Rain", weather_2017$Events)
-weather_2017$Events <- gsub("Fog , Rain , Snow|Fog , Snow|Rain , Snow|Snow", "Snow", weather_2017$Events)
-weather_2017$Events <- gsub("Fog , Rain , Thunderstorm|Fog , Snow , Thunderstorm|Rain , Hail , Thunderstorm|Rain , Thunderstorm|Thunderstorm|Snow , Thunderstorm", "Thunderstorm", weather_2017$Events)
-weather_2017$Events <- as.factor(weather_2017$Events)
-levels(weather_2017$Events)
-
-trips_2017_Q1 <- read_csv("Divvy_Trips_2017_Q1.csv")
-trips_2017_Q2 <- read_csv("Divvy_Trips_2017_Q2.csv")
-trips_2017 <- rbind(trips_2017_Q1, trips_2017_Q2)
-
-trips_2017$Date <- as_date(mdy_hms(trips_2017$start_time))
-byday3 <- trips_2017 %>% 
-  group_by(Date) %>% 
-  summarise(Trips = n()) %>% 
-  mutate(Wday = wday(Date, label = TRUE))
-
-byday3$Quarter <- 1
-byday3$Quarter[month(byday3$Date) %in% 4:6] <- 2
-byday3$Quarter[month(byday3$Date) %in% 7:9] <- 3
-byday3$Quarter[month(byday3$Date) %in% 10:12] <- 4
-byday3$Quarter <- as.factor(byday3$Quarter)
-levels(byday3$Quarter) <- levels(byday3$Quarter)
-
-test <- weather_2017 %>% 
-  left_join(byday3, by = "Date")
-```
-
-## Model
+## Prediction
 
 ### Linear Regression
 
@@ -351,3 +232,127 @@ test$yhat <- predict(boost.divvy, newdata = test, n.trees=5000)
 graph
 ```
 
+
+## Data Preparation (Optional)
+
+First I will combine all the trips dataset into one data frame and convert start and stop time into date format.
+
+```{r datasets, results = 'hide'}
+trips_2014_Q1Q2 <- read_csv("Divvy_Trips_2014_Q1Q2.csv")
+trips_2014_Q3_07 <- read_csv("Divvy_Trips_2014-Q3-07.csv")
+trips_2014_Q3_0809 <- read_csv("Divvy_Trips_2014-Q3-0809.csv")
+trips_2014_Q4 <- read_csv("Divvy_Trips_2014-Q4.csv")
+trips_2015_Q1 <- read_csv("Divvy_Trips_2015-Q1.csv")
+trips_2015_Q2 <- read_csv("Divvy_Trips_2015-Q2.csv")
+trips_2015_Q3_07 <- read_csv("Divvy_Trips_2015_07.csv")
+trips_2015_Q3_08 <- read_csv("Divvy_Trips_2015_08.csv")
+trips_2015_Q3_09 <- read_csv("Divvy_Trips_2015_09.csv")
+trips_2015_Q4 <- read_csv("Divvy_Trips_2015_Q4.csv")
+trips_2016_Q1 <- read_csv("Divvy_Trips_2016_Q1.csv")
+trips_2016_Q2_04 <- read_csv("Divvy_Trips_2016_04.csv")
+trips_2016_Q2_05 <- read_csv("Divvy_Trips_2016_05.csv")
+trips_2016_Q2_06 <- read_csv("Divvy_Trips_2016_06.csv")
+trips_2016_Q3 <- read_csv("Divvy_Trips_2016_Q3.csv")
+trips_2016_Q4 <- read_csv("Divvy_Trips_2016_Q4.csv")
+trips_2017_Q1 <- read_csv("Divvy_Trips_2017_Q1.csv")
+trips_2017_Q2 <- read_csv("Divvy_Trips_2017_Q2.csv")
+
+trips <- rbind(trips_2014_Q1Q2, trips_2014_Q3_07, trips_2014_Q3_0809, trips_2014_Q4, 
+               trips_2015_Q1, trips_2015_Q2, trips_2015_Q3_07, trips_2015_Q3_08,
+               trips_2015_Q3_09, trips_2015_Q4, trips_2016_Q1, trips_2016_Q2_04,
+               trips_2016_Q2_05, trips_2016_Q2_06)
+trips$starttime <- as_date(mdy_hm(trips$starttime))
+trips$stoptime <- as_date(mdy_hm(trips$stoptime))
+# starttime and stoptime for 2016 Q3 & Q4 are formatted differently
+trips_2016_Q3Q4 <- rbind(trips_2016_Q3, trips_2016_Q4)
+trips_2016_Q3Q4$starttime <- as_date(mdy_hms(trips_2016_Q3Q4$starttime))
+trips_2016_Q3Q4$stoptime <- as_date(mdy_hms(trips_2016_Q3Q4$stoptime))
+trips <- rbind(trips, trips_2016_Q3Q4)
+```
+
+Now, in order to get the usage value, we have to first group the number of trips taken by date. There are two options available for date to sum over - start and stop time. There are `r trips$starttime != trips$stoptime` instances where start time are different from the stop time. Since this is only samll percentage, we will use start time to sum together trips.
+
+```{r}
+names(trips)[names(trips) == "starttime"] <- "Date"
+byday <- trips %>%
+  group_by(Date) %>% 
+  summarise(Trips = n()) %>% 
+```
+
+Now, let's take a look at weather data.
+
+```{r}
+weather <- read_csv("chicagoweather.csv")
+# convert date
+weather$Date <- as_date(dmy(weather$Date))
+
+# "T" stands for "trace", used when precipitation has been detected, but it isn't sufficient to measure meaningfully > so replace all "T"s with 0s.
+weather$Precipitation[weather$Precipitation == "T"] <- 0
+weather$Precipitation <- as.numeric(weather$Precipitation)
+# Treating Events variable
+weather[which(is.na(weather$Events)),]$Events <- "None"
+weather$Events <- as.factor(weather$Events)
+levels(weather$Events)
+weather$Events <- gsub("Fog|Fog\\r\\t,\\rRain|Rain", "Rain", weather$Events)
+weather$Events <- gsub("Fog\\r\\t,\\rRain\\r\\t,\\rSnow|Fog\\r\\t,\\rSnow|Rain\\r\\t,\\rSnow|Snow", "Snow", weather$Events)
+weather$Events <- gsub("Fog\\r\\t,\\rRain\\r\\t,\\rThunderstorm|Rain\\r\\t,\\rHail\\r\\t,\\rThunderstorm|Rain\\r\\t,\\rThunderstorm|Thunderstorm", "Thunderstorm", weather$Events)
+weather$Events <- as.factor(weather$Events)
+levels(weather$Events)
+```
+
+Now we are ready to merge and create our training dataset!
+
+```{r}
+train <- weather %>% 
+  left_join(byday, by = "Date")
+```
+
+There are few missing values in our training data set. These are from the days when there were no trips, so we input the adequate values accordingly.
+
+```{r}
+train[which(is.na(train$Trips)),]
+which(is.na(train$Trips))
+train[195, "Wday"] <- "Tues"
+train[196, "Wday"] <- "Wed"
+train[which(is.na(train$Quarter)),]$Quarter <- 1
+train[which(is.na(train$Trips)),]$Trips <- 0
+```
+
+## Test
+
+Now we do the same transformation to trips and weather data for 2017 to create our testing set.
+
+```{r}
+weather_2017 <- read_csv("chicagoweather2017.csv")
+weather_2017$Date <- as_date(dmy(weather_2017$Date))
+weather_2017[which(is.na(weather_2017$Precipitation)),]$Precipitation <- 0
+weather_2017$Precipitation <- as.numeric(weather_2017$Precipitation)
+weather_2017[which(is.na(weather_2017$Events)),]$Events <- "None"
+weather_2017$Events <- as.factor(weather_2017$Events)
+levels(weather_2017$Events)
+weather_2017$Events <- gsub("Fog|Fog , Rain|Rain", "Rain", weather_2017$Events)
+weather_2017$Events <- gsub("Fog , Rain , Snow|Fog , Snow|Rain , Snow|Snow", "Snow", weather_2017$Events)
+weather_2017$Events <- gsub("Fog , Rain , Thunderstorm|Fog , Snow , Thunderstorm|Rain , Hail , Thunderstorm|Rain , Thunderstorm|Thunderstorm|Snow , Thunderstorm", "Thunderstorm", weather_2017$Events)
+weather_2017$Events <- as.factor(weather_2017$Events)
+levels(weather_2017$Events)
+
+trips_2017_Q1 <- read_csv("Divvy_Trips_2017_Q1.csv")
+trips_2017_Q2 <- read_csv("Divvy_Trips_2017_Q2.csv")
+trips_2017 <- rbind(trips_2017_Q1, trips_2017_Q2)
+
+trips_2017$Date <- as_date(mdy_hms(trips_2017$start_time))
+byday3 <- trips_2017 %>% 
+  group_by(Date) %>% 
+  summarise(Trips = n()) %>% 
+  mutate(Wday = wday(Date, label = TRUE))
+
+byday3$Quarter <- 1
+byday3$Quarter[month(byday3$Date) %in% 4:6] <- 2
+byday3$Quarter[month(byday3$Date) %in% 7:9] <- 3
+byday3$Quarter[month(byday3$Date) %in% 10:12] <- 4
+byday3$Quarter <- as.factor(byday3$Quarter)
+levels(byday3$Quarter) <- levels(byday3$Quarter)
+
+test <- weather_2017 %>% 
+  left_join(byday3, by = "Date")
+```
