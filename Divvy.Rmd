@@ -282,7 +282,7 @@ graph
 ### Bagging and Random Forest
 
 ```{r}
-combi <- rbind(train, test)
+combi <- rbind(train, test[,-25])
 train <- combi[1:1284,]
 test <- combi[1285:1465,]
 ```
