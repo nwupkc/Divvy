@@ -13,8 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introduction
 
-This is a prediction of bicycle sharing usage in the city of Chicago. I have defined the usage as the number of trips taken per day. I will use historical trips and weather datasets from 2014 to 2016 to predict the usage for the first half of 2017. I have decided to exclude trips data from 2013 as the number of rides during summer months are noticeably low as Divvy just started out its service in the Windy City making the prediction less accurate.
-
+This is a prediction of bicycle sharing usage in the city of Chicago. I have defined the usage as the number of trips taken per day. I will use historical trips and weather datasets from 2014 to 2016 to predict the usage for the first half of 2017. I have decided to exclude trips data from 2013 as the number of rides during first few months are noticeably low as Divvy just started out its service in the Windy City.
 
 ## Load Data
 
@@ -35,6 +34,17 @@ train <- read_csv("train.csv")
 test <- read_csv("test.csv")
 
 str(train)
+```
+
+There are few missing values in our training data set. These are from the days when there were no trips, so we input the adequate values accordingly.
+
+```{r}
+train[which(is.na(train$Trips)),]
+which(is.na(train$Trips))
+train[195, "Wday"] <- "Tues"
+train[196, "Wday"] <- "Wed"
+train[which(is.na(train$Quarter)),]$Quarter <- 1
+train[which(is.na(train$Trips)),]$Trips <- 0
 ```
 
 ## Feature Engineering
@@ -274,21 +284,23 @@ Now, in order to get the usage value, we have to first group the number of trips
 
 ```{r}
 names(trips)[names(trips) == "starttime"] <- "Date"
-byday <- trips %>%
+byday <- trips %>% 
   group_by(Date) %>% 
-  summarise(Trips = n()) %>% 
+  summarise(Trips = n())
 ```
 
 Now, let's take a look at weather data.
 
-```{r}
+```{r, results = 'hide'}
 weather <- read_csv("chicagoweather.csv")
-# convert date
+# Convert date
 weather$Date <- as_date(dmy(weather$Date))
 
-# "T" stands for "trace", used when precipitation has been detected, but it isn't sufficient to measure meaningfully > so replace all "T"s with 0s.
+# "T" stands for "trace", used when precipitation has been detected, but it isn't sufficient to measure meaningfully
 weather$Precipitation[weather$Precipitation == "T"] <- 0
 weather$Precipitation <- as.numeric(weather$Precipitation)
+```
+```{r}
 # Treating Events variable
 weather[which(is.na(weather$Events)),]$Events <- "None"
 weather$Events <- as.factor(weather$Events)
@@ -298,31 +310,15 @@ weather$Events <- gsub("Fog\\r\\t,\\rRain\\r\\t,\\rSnow|Fog\\r\\t,\\rSnow|Rain\\
 weather$Events <- gsub("Fog\\r\\t,\\rRain\\r\\t,\\rThunderstorm|Rain\\r\\t,\\rHail\\r\\t,\\rThunderstorm|Rain\\r\\t,\\rThunderstorm|Thunderstorm", "Thunderstorm", weather$Events)
 weather$Events <- as.factor(weather$Events)
 levels(weather$Events)
-```
 
-Now we are ready to merge and create our training dataset!
-
-```{r}
+# Merge and create our training dataset!
 train <- weather %>% 
   left_join(byday, by = "Date")
 ```
 
-There are few missing values in our training data set. These are from the days when there were no trips, so we input the adequate values accordingly.
+We do the same transformation to trips and weather data for 2017 to create our testing set.
 
-```{r}
-train[which(is.na(train$Trips)),]
-which(is.na(train$Trips))
-train[195, "Wday"] <- "Tues"
-train[196, "Wday"] <- "Wed"
-train[which(is.na(train$Quarter)),]$Quarter <- 1
-train[which(is.na(train$Trips)),]$Trips <- 0
-```
-
-## Test
-
-Now we do the same transformation to trips and weather data for 2017 to create our testing set.
-
-```{r}
+```{r, results = 'hide'}
 weather_2017 <- read_csv("chicagoweather2017.csv")
 weather_2017$Date <- as_date(dmy(weather_2017$Date))
 weather_2017[which(is.na(weather_2017$Precipitation)),]$Precipitation <- 0
