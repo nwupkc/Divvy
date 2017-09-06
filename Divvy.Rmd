@@ -29,7 +29,7 @@ library('gbm')
 
 To jump right into the Exploratory Data Analysis and Feature Engineering, I have written detailed data preparation at the end.
 
-```{r import, results = 'hide'}
+```{r import, message = FALSE}
 train <- read_csv("train.csv")
 test <- read_csv("test.csv")
 ```

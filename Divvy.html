@@ -136,32 +136,8 @@ library('tree')
 library('randomForest')
 library('gbm')</code></pre>
 <p>To jump right into the Exploratory Data Analysis and Feature Engineering, I have written detailed data preparation at the end.</p>
-<pre class="r"><code>train &lt;- read_csv(&quot;train.csv&quot;)</code></pre>
-<pre><code>## Parsed with column specification:
-## cols(
-##   .default = col_integer(),
-##   Date = col_date(format = &quot;&quot;),
-##   Sea_Level_Press_High = col_double(),
-##   Sea_Level_Press_Avg = col_double(),
-##   Sea_Level_Press_Low = col_double(),
-##   Wind_High = col_character(),
-##   Precipitation = col_double(),
-##   Events = col_character()
-## )</code></pre>
-<pre><code>## See spec(...) for full column specifications.</code></pre>
-<pre class="r"><code>test &lt;- read_csv(&quot;test.csv&quot;)</code></pre>
-<pre><code>## Parsed with column specification:
-## cols(
-##   .default = col_integer(),
-##   Date = col_date(format = &quot;&quot;),
-##   Sea_Level_Press_High = col_double(),
-##   Sea_Level_Press_Avg = col_double(),
-##   Sea_Level_Press_Low = col_double(),
-##   Wind_High = col_character(),
-##   Precipitation = col_double(),
-##   Events = col_character()
-## )
-## See spec(...) for full column specifications.</code></pre>
+<pre class="r"><code>train &lt;- read_csv(&quot;train.csv&quot;)
+test &lt;- read_csv(&quot;test.csv&quot;)</code></pre>
 <pre class="r"><code># check data
 str(train)</code></pre>
 <pre><code>## Classes 'tbl_df', 'tbl' and 'data.frame':    1096 obs. of  22 variables:

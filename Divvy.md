@@ -26,43 +26,7 @@ To jump right into the Exploratory Data Analysis and Feature Engineering, I have
 
 ```r
 train <- read_csv("train.csv")
-```
-
-```
-## Parsed with column specification:
-## cols(
-##   .default = col_integer(),
-##   Date = col_date(format = ""),
-##   Sea_Level_Press_High = col_double(),
-##   Sea_Level_Press_Avg = col_double(),
-##   Sea_Level_Press_Low = col_double(),
-##   Wind_High = col_character(),
-##   Precipitation = col_double(),
-##   Events = col_character()
-## )
-```
-
-```
-## See spec(...) for full column specifications.
-```
-
-```r
 test <- read_csv("test.csv")
-```
-
-```
-## Parsed with column specification:
-## cols(
-##   .default = col_integer(),
-##   Date = col_date(format = ""),
-##   Sea_Level_Press_High = col_double(),
-##   Sea_Level_Press_Avg = col_double(),
-##   Sea_Level_Press_Low = col_double(),
-##   Wind_High = col_character(),
-##   Precipitation = col_double(),
-##   Events = col_character()
-## )
-## See spec(...) for full column specifications.
 ```
 
 ```r
