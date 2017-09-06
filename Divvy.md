@@ -4,7 +4,7 @@ Sungwan Kim
 
 
 
-## Introduction
+# Introduction
 
 This is a prediction of bicycle sharing usage in the city of Chicago. I have defined the usage as the number of trips taken per day. I will use historical trips and weather datasets from 2014 to 2016 to predict the usage for the first half of 2017. I have decided to exclude trips data from 2013 as the number of rides during first few months are noticeably low as Divvy just started out its service in the Windy City.
 
@@ -26,43 +26,7 @@ To jump right into the Exploratory Data Analysis and Feature Engineering, I have
 
 ```r
 train <- read_csv("train.csv")
-```
-
-```
-## Parsed with column specification:
-## cols(
-##   .default = col_integer(),
-##   Date = col_date(format = ""),
-##   Sea_Level_Press_High = col_double(),
-##   Sea_Level_Press_Avg = col_double(),
-##   Sea_Level_Press_Low = col_double(),
-##   Wind_High = col_character(),
-##   Precipitation = col_double(),
-##   Events = col_character()
-## )
-```
-
-```
-## See spec(...) for full column specifications.
-```
-
-```r
 test <- read_csv("test.csv")
-```
-
-```
-## Parsed with column specification:
-## cols(
-##   .default = col_integer(),
-##   Date = col_date(format = ""),
-##   Sea_Level_Press_High = col_double(),
-##   Sea_Level_Press_Avg = col_double(),
-##   Sea_Level_Press_Low = col_double(),
-##   Wind_High = col_character(),
-##   Precipitation = col_double(),
-##   Events = col_character()
-## )
-## See spec(...) for full column specifications.
 ```
 
 ```r
@@ -223,7 +187,7 @@ test$Quarter <- as.factor(test$Quarter)
 levels(test$Quarter) <- levels(train$Quarter)
 ```
 
-## Prediction
+# Prediction
 
 ### Linear Regression
 
@@ -679,7 +643,7 @@ sqrt(mean((predict(boost.divvy, newdata = test,n.trees = 5000) - test$Trips)^2))
 
 ![](Divvy_files/figure-html/boosting-1.png)<!-- -->
 
-## Conclusion
+# Conclusion
 
 We have used linear regression, decision trees, bagging, random forests, and boosting models to predict the usage of Divvy. Ensemble models performed better than simple models like linear regression and decision trees. The RMSE associated with bagging is 2025.091 compared to that of a simple linear regression's 2476.261. We have to acknowledge that RMSE was important as our primary goal was prediction accuracy. If instead our goal was interpretability of the model, then linear regression and decision tree is far more interpretable than complex ensemble models.
 
