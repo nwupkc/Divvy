@@ -433,7 +433,7 @@ which.min(reg.summary$bic)
 points(8, reg.summary$bic[8], col = "red", cex = 2, pch = 20)
 ```
 
-![](Divvy_files/figure-html/feature selection-1.png)<!-- -->
+![](Divvy_files/figure-html/feature_selection-1.png)<!-- -->
 
 It is clear that using all 8 regressors is the right way to go.
 
@@ -489,7 +489,7 @@ sqrt(mean((predict(tree.divvy, newdata = test) - test$Trips)^2))
 ## [1] 2340.803
 ```
 
-![](Divvy_files/figure-html/decision trees-1.png)<!-- -->
+![](Divvy_files/figure-html/decision_trees-1.png)<!-- -->
 
 We did better than linear models. We can do even better by using decision trees as building blocks to create powerful machine learning algorithms.
 
@@ -606,7 +606,7 @@ importance(rf.divvy)
 varImpPlot(rf.divvy)
 ```
 
-![](Divvy_files/figure-html/var imp-1.png)<!-- -->
+![](Divvy_files/figure-html/varimp-1.png)<!-- -->
 
 Boosting works similarly as bagging, but the trees are grown sequentially meaning it builds on top of what the previous trees have learned.
 

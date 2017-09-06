@@ -85,7 +85,7 @@ It seems like the usage for day of the week vary for different quarters.
 
 We add the same feature engineered variables to our test set.
 
-```{r add var test}
+```{r addvartest}
 test <- test %>% 
   mutate(Wday = wday(Date, label = TRUE))
 test$Quarter <- 1
@@ -162,7 +162,7 @@ We have done better than our orignial linear model! We have found a model which 
 
 To choose the optimal model with right numbers of varaibles we will consdier Adjusted R-squared, Bayesian information criterion(BIC), and Cp.
 
-```{r feature selection, fig.show = "hold"}
+```{r feature_selection, fig.show = "hold"}
 regfit.full <- regsubsets(sqrt(Trips) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 reg.summary <- summary(regfit.full)
 # R-squared statistic always increase with additional variable
@@ -187,7 +187,7 @@ It is clear that using all 8 regressors is the right way to go.
 
 Next, we consider the decision trees model to predict the usage. Among many advantages of decision trees is its high interpretability.
 
-```{r decision trees, fig.show = "hold"}
+```{r decision_trees, fig.show = "hold"}
 # set random seed
 set.seed(11)
 tree.divvy <- tree(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
@@ -227,7 +227,7 @@ Bagging result shows improved accuracy over a single tree. Bagging model is a sp
 
 Random forests works similarly as bagging but instead decorrelates the individual trees by taking a random sample of predictors when building each tree. The default number of features is square root of the all available features which in this case is 3.
 
-```{r random forests}
+```{r random_forests}
 rf.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry=3, importance=TRUE)
 
 # RMSE
@@ -236,7 +236,7 @@ sqrt(mean((predict(rf.divvy, newdata = test) - test$Trips)^2))
 
 Let’s look at relative variable importance by plotting the mean decrease in Gini calculated across all trees. Temperature is by far the most important variable.
 
-```{r var imp, fig.show = "hold"}
+```{r varimp, fig.show = "hold"}
 importance(rf.divvy)
 varImpPlot(rf.divvy)
 ```
