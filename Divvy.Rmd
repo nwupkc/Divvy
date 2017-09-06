@@ -22,7 +22,7 @@ This is a prediction of bicycle sharing usage in the city of Chicago. I have def
 library('tidyverse')
 library('lubridate')
 library('leaps')
-library('tree')
+library('rpart')
 library('randomForest')
 library('gbm')
 ```
@@ -39,7 +39,6 @@ str(train)
 ```
 
 There are few missing values in our training data set. These are from the days when there were no trips, so we input the adequate values accordingly.
-
 
 ```{r}
 which(is.na(train$Trips))
@@ -84,14 +83,21 @@ train %>%
 
 It seems like the usage for day of the week vary for different quarters.
 
+We add the same feature engineered variables to our test set.
+
+```{r}
+test <- test %>% 
+  mutate(Wday = wday(Date, label = TRUE))
+test$Quarter <- 1
+test$Quarter[month(test$Date) %in% 4:6] <- 2
+test$Quarter[month(test$Date) %in% 7:9] <- 3
+test$Quarter[month(test$Date) %in% 10:12] <- 4
+test$Quarter <- as.factor(test$Quarter)
+levels(test$Quarter) <- levels(train$Quarter)
+```
 
 ## Prediction
 
-```{r}
-full <- rbind(train, test)
-train <- full[1:1096,]
-test <- full[1097:1277, ]
-```
 
 ### Linear Regression
 
@@ -155,13 +161,6 @@ sqrt(mean((test$Trips - predict(lm.fit4, test)^2)^2))
 
 We have done better than our orignial linear model! We have found a model which is both more accurate and robust.
 
-Now, let's see if using all the features is the right way to run the regression. There might be issue of multicollinearity between weather variables as they are likely to be highly correlated.
-
-```{r}
-library(car)
-vif(lm.fit)
-```
-
 To choose the optimal model with right numbers of varaibles we will consdier Adjusted R-squared, Bayesian information criterion(BIC), and Cp.
 
 ```{r}
@@ -185,16 +184,15 @@ points(8, reg.summary$bic[8], col = "red", cex = 2, pch = 20)
 
 It is clear that using all 8 regressors is the right way to go.
 
-### Decision Tree
+### Decision Trees
 
 Next, we consider the decision trees model to predict the usage.
 
 ```{r}
 # set random seed
 set.seed(11)
-tree.divvy <- tree(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
+tree.divvy <- rpart(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
 summary(tree.divvy)
-par(mfrow=c(1, 1))
 # plot tree
 plot(tree.divvy)
 text(tree.divvy, pretty = 0)
@@ -206,17 +204,27 @@ We did better than linear models. We can do even better.
 
 ### Bagging, Random Forests, Boosting
 
-Instead of using decision trees, we can use many trees to predict the usage. Bagging model is a special case of random forest when we use all the features available.
+We will first convert character vectors to factors.
+
+```{r}
+sapply(train, typeof)
+sapply(test, typeof)
+train$Events <- as.factor(train$Events)
+test$Events <- as.factor(test$Events)
+```
+
+Instead of using decision trees which suffers from high variance, we can use bootstrap aggregation or bagging to reduce the variance of a statistical learning method. Bagging takes repeated samples from our training set, grows hundreds of trees and averages all the predictions.
 
 ```{r}
 set.seed(11)
-bag.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry=9, importance=TRUE)
+bag.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry = 9, importance = TRUE)
+#RMSE
 sqrt(mean((predict(bag.divvy, newdata = test) - test$Trips)^2))
 ```
 
+Bagging result shows improved accuracy over a single tree. Bagging model is a special case of random forest when we use all the features available.
 
-Now we use random forest. The default is using square root of features in this case 3.
-
+Random forests decorrelates the trees by taking a random sample of predictors when building each tree. The default is using square root of the number of features which in this case is 3.
 ```{r}
 rf.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry=3, importance=TRUE)
 
@@ -224,29 +232,27 @@ rf.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg 
 sqrt(mean((predict(rf.divvy, newdata = test) - test$Trips)^2))
 ```
 
-Let’s look at relative variable importance by plotting the mean decrease in Gini calculated across all trees.
+Let’s look at relative variable importance by plotting the mean decrease in Gini calculated across all trees. Temperature is by far the most important variable.
 
 ```{r}
 importance(rf.divvy)
 varImpPlot(rf.divvy)
 ```
 
-Temperature is the most important variable.
-
+Boosting works similarly as bagging, but the trees are grown sequentially
 
 ```{r}
 set.seed(11)
-boost.divvy <- gbm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, distribution="gaussian", n.trees=5000, interaction.depth=4)
+boost.divvy <- gbm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, distribution="gaussian", n.trees = 5000, interaction.depth = 4)
 summary(boost.divvy)
+
 #RMSE
-sqrt(mean((predict(boost.divvy, newdata = test,n.trees=5000) - test$Trips)^2))
+sqrt(mean((predict(boost.divvy, newdata = test,n.trees = 5000) - test$Trips)^2))
 ```
-
-
 
 # Conclusion
 
-
+We have used linear regression, decision trees, bagging, random forests, and boosting models to predict the usage of Divvy. Ensemble models performed the best in terms of prediction with RMSE associated bagging of 2025.091 and simple linear regression with 2476.261 (`r -(2025.091 - 2476.261) / 2476.261 * 100%` improvement!). This is based on the fact that we wanted prediction accuracy. If our goal was interpretability of the model, then linear regression and decision tree is far more interpretable than ensemble models.
 
 
 ## Data Preparation (Optional)
@@ -305,8 +311,7 @@ weather$Date <- as_date(dmy(weather$Date))
 # "T" stands for "trace", used when precipitation has been detected, but it isn't sufficient to measure meaningfully
 weather$Precipitation[weather$Precipitation == "T"] <- 0
 weather$Precipitation <- as.numeric(weather$Precipitation)
-```
-```{r}
+
 # treating events variable
 weather[which(is.na(weather$Events)),]$Events <- "None"
 weather$Events <- as.factor(weather$Events)
@@ -346,19 +351,10 @@ levels(weather_2017$Events)
 trips_2017_Q1 <- read_csv("Divvy_Trips_2017_Q1.csv")
 trips_2017_Q2 <- read_csv("Divvy_Trips_2017_Q2.csv")
 trips_2017 <- rbind(trips_2017_Q1, trips_2017_Q2)
-
 trips_2017$Date <- as_date(mdy_hms(trips_2017$start_time))
 byday2 <- trips_2017 %>% 
   group_by(Date) %>% 
-  summarise(Trips = n()) %>% 
-  mutate(Wday = wday(Date, label = TRUE))
-
-byday2$Quarter <- 1
-byday2$Quarter[month(byday2$Date) %in% 4:6] <- 2
-byday2$Quarter[month(byday2$Date) %in% 7:9] <- 3
-byday2$Quarter[month(byday2$Date) %in% 10:12] <- 4
-byday2$Quarter <- as.factor(byday2$Quarter)
-levels(test$Quarter) <- levels(train$Quarter)
+  summarise(Trips = n())
 
 test <- weather_2017 %>% 
   left_join(byday2, by = "Date")
