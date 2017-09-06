@@ -254,7 +254,7 @@ So, how did our model do in terms of prediction? I have used Root Mean Squared E
 ## [1] 2476.261
 ```
 
-The linear model has a root mean squared error(RMSE) of 2476.2614429.
+The linear model has a root mean squared error(RMSE) of 2476.261.
 
 We might want to have an interaction term between day of the week and quarter variables as we have confirmed above that the usage differ by weekdays for different quarters.
 

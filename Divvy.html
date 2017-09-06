@@ -302,7 +302,7 @@ summary(lm.fit)</code></pre>
 <pre class="r"><code># RMSE
 (RMSE &lt;- sqrt(mean((test$Trips - predict(lm.fit, test))^2)))</code></pre>
 <pre><code>## [1] 2476.261</code></pre>
-<p>The linear model has a root mean squared error(RMSE) of 2476.2614429.</p>
+<p>The linear model has a root mean squared error(RMSE) of 2476.261.</p>
 <p>We might want to have an interaction term between day of the week and quarter variables as we have confirmed above that the usage differ by weekdays for different quarters.</p>
 <pre class="r"><code>lm.fit2 &lt;- lm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 summary(lm.fit2)</code></pre>

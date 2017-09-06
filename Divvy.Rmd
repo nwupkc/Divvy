@@ -116,7 +116,7 @@ So, how did our model do in terms of prediction? I have used Root Mean Squared E
 (RMSE <- sqrt(mean((test$Trips - predict(lm.fit, test))^2)))
 ```
 
-The linear model has a root mean squared error(RMSE) of `r RMSE`.
+The linear model has a root mean squared error(RMSE) of `r round(RMSE, digits=3)`.
 
 We might want to have an interaction term between day of the week and quarter variables as we have confirmed above that the usage differ by weekdays for different quarters.
 
