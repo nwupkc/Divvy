@@ -11,11 +11,11 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Introduction
+## Introduction
 
 This is a prediction of bicycle sharing usage in the city of Chicago. I have defined the usage as the number of trips taken per day. I will use historical trips and weather datasets from 2014 to 2016 to predict the usage for the first half of 2017. I have decided to exclude trips data from 2013 as the number of rides during first few months are noticeably low as Divvy just started out its service in the Windy City.
 
-## Load Data
+### Load Data
 
 ```{r packages, results = 'hide'}
 # Load packages
@@ -29,18 +29,18 @@ library('gbm')
 
 To jump right into the Exploratory Data Analysis and Feature Engineering, I have written detailed data preparation at the end.
 
-```{r, results = 'hide'}
+```{r import, results = 'hide'}
 train <- read_csv("train.csv")
 test <- read_csv("test.csv")
 ```
-```{r}
+```{r check}
 # check data
 str(train)
 ```
 
 There are few missing values in our training data set. These are from the days when there were no trips, so we input the adequate values accordingly.
 
-```{r}
+```{r NAs}
 which(is.na(train$Trips))
 train[which(is.na(train$Trips)),]$Trips <- 0
 ```
@@ -50,13 +50,13 @@ train[which(is.na(train$Trips)),]$Trips <- 0
 
 Let's shed more light into what is driving the Divvy usage. First, I will define usage to be the number of trips taken per day.
 
-```{r}
+```{r graph1}
 ggplot(train, aes(Date, Trips)) + geom_line()
 ```
 
 The graph shows strong seasonal pattern. I will create a variable called quarter so that our models can capture this pattern when predicting.
 
-```{r}
+```{r quarter}
 train$Quarter <- 1
 train$Quarter[month(train$Date) %in% 4:6] <- 2
 train$Quarter[month(train$Date) %in% 7:9] <- 3
@@ -66,7 +66,7 @@ train$Quarter <- as.factor(train$Quarter)
 
 I will create day of the week variable to see the shorter usage pattern.
 
-```{r}
+```{r graph2}
 train <- train %>% 
   mutate(Wday = wday(Date, label = TRUE))
 ggplot(train, aes(Wday, Trips)) + geom_boxplot()
@@ -74,7 +74,7 @@ ggplot(train, aes(Wday, Trips)) + geom_boxplot()
 
 It seems like usage during week days are little higher than usage during weekends.
 
-```{r}
+```{r graph3}
 train %>% 
   ggplot(aes(Wday, Trips)) +
     geom_boxplot() +
@@ -85,7 +85,7 @@ It seems like the usage for day of the week vary for different quarters.
 
 We add the same feature engineered variables to our test set.
 
-```{r}
+```{r add var test}
 test <- test %>% 
   mutate(Wday = wday(Date, label = TRUE))
 test$Quarter <- 1
@@ -98,12 +98,11 @@ levels(test$Quarter) <- levels(train$Quarter)
 
 ## Prediction
 
-
 ### Linear Regression
 
-I will first use linear regression as a starting point
+I will first use linear regression as a starting point.
 
-```{r}
+```{r lm1}
 lm.fit <- lm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
 summary(lm.fit)
 ```
@@ -112,7 +111,7 @@ The p-value associated with the F-statistics suggest that we can reject the null
 
 So, how did our model do in terms of prediction? I have used Root Mean Squared Error(RMSE) which is a popular metric for assessing model accuracy. 
 
-```{r}
+```{r rmse}
 # RMSE
 (RMSE <- sqrt(mean((test$Trips - predict(lm.fit, test))^2)))
 ```
@@ -121,7 +120,7 @@ The linear model has a root mean squared error(RMSE) of `r RMSE`.
 
 We might want to have an interaction term between day of the week and quarter variables as we have confirmed above that the usage differ by weekdays for different quarters.
 
-```{r}
+```{r lm2}
 lm.fit2 <- lm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 summary(lm.fit2)
 #RMSE
@@ -132,14 +131,14 @@ We did a little better in terms of the prediction.
 
 One possible problem of the linear regression is non-constant variances in the errors, or heteroscedasticity. The residuals plot has a funnel shape which implies heteroskedasticity.
 
-```{r}
+```{r graph4}
 par(mfrow=c(2,2))
 plot(lm.fit2)
 ```
 
 We can solve heteroskedasticity by log transformation. Since we have two trips value with 0, we cannot take log straight away. One way to bypass this problem is to add 1.
 
-```{r}
+```{r lm3}
 lm.fit3 <- lm(log2(Trips+1) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 par(mfrow=c(2,2))
 plot(lm.fit3)
@@ -150,7 +149,7 @@ sqrt(mean((test$Trips - 2^(predict(lm.fit3, test))-1)^2))
 
 We treated heteroskedasticity, but the prediction result suffered as RMSE score skyrocketed. Another way to treat heteroskedasticy would be using square root.
 
-```{r}
+```{r lm4}
 lm.fit4 <- lm(sqrt(Trips) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 par(mfrow=c(2,2))
 plot(lm.fit4)
@@ -163,7 +162,7 @@ We have done better than our orignial linear model! We have found a model which 
 
 To choose the optimal model with right numbers of varaibles we will consdier Adjusted R-squared, Bayesian information criterion(BIC), and Cp.
 
-```{r}
+```{r feature selection}
 regfit.full <- regsubsets(sqrt(Trips) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 reg.summary <- summary(regfit.full)
 # R-squared statistic always increase with additional variable
@@ -186,7 +185,7 @@ It is clear that using all 8 regressors is the right way to go.
 
 ### Decision Trees
 
-Next, we consider the decision trees model to predict the usage.
+Next, we consider the decision trees model to predict the usage. Among many advantages of decision trees is its high interpretability.
 
 ```{r}
 # set random seed
@@ -200,13 +199,15 @@ text(tree.divvy, pretty = 0)
 sqrt(mean((predict(tree.divvy, newdata = test) - test$Trips)^2))
 ```
 
-We did better than linear models. We can do even better.
+We did better than linear models. We can do even better by using decision trees as building blocks to create powerful machine learning algorithms.
 
-### Bagging, Random Forests, Boosting
+### Ensemble Models
 
-We will first convert character vectors to factors.
+In this section we will consider three ensembles models: Bagging, Random Forests, and Boosting.
 
-```{r}
+We will first convert character vectors to factors so we can use randomForest.
+
+```{r factors}
 sapply(train, typeof)
 sapply(test, typeof)
 train$Events <- as.factor(train$Events)
@@ -215,7 +216,7 @@ test$Events <- as.factor(test$Events)
 
 Instead of using decision trees which suffers from high variance, we can use bootstrap aggregation or bagging to reduce the variance of a statistical learning method. Bagging takes repeated samples from our training set, grows hundreds of trees and averages all the predictions.
 
-```{r}
+```{r bagging}
 set.seed(11)
 bag.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry = 9, importance = TRUE)
 #RMSE
@@ -224,8 +225,9 @@ sqrt(mean((predict(bag.divvy, newdata = test) - test$Trips)^2))
 
 Bagging result shows improved accuracy over a single tree. Bagging model is a special case of random forest when we use all the features available.
 
-Random forests decorrelates the trees by taking a random sample of predictors when building each tree. The default is using square root of the number of features which in this case is 3.
-```{r}
+Random forests works similarly as bagging but instead decorrelates the individual trees by taking a random sample of predictors when building each tree. The default number of features is square root of the all available features which in this case is 3.
+
+```{r random forests}
 rf.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry=3, importance=TRUE)
 
 # RMSE
@@ -234,14 +236,14 @@ sqrt(mean((predict(rf.divvy, newdata = test) - test$Trips)^2))
 
 Let’s look at relative variable importance by plotting the mean decrease in Gini calculated across all trees. Temperature is by far the most important variable.
 
-```{r}
+```{r var imp}
 importance(rf.divvy)
 varImpPlot(rf.divvy)
 ```
 
-Boosting works similarly as bagging, but the trees are grown sequentially
+Boosting works similarly as bagging, but the trees are grown sequentially meaning it builds on top of what the previous trees have learned.
 
-```{r}
+```{r boosting}
 set.seed(11)
 boost.divvy <- gbm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, distribution="gaussian", n.trees = 5000, interaction.depth = 4)
 summary(boost.divvy)
@@ -250,16 +252,16 @@ summary(boost.divvy)
 sqrt(mean((predict(boost.divvy, newdata = test,n.trees = 5000) - test$Trips)^2))
 ```
 
-# Conclusion
+## Conclusion
 
-We have used linear regression, decision trees, bagging, random forests, and boosting models to predict the usage of Divvy. Ensemble models performed the best in terms of prediction with RMSE associated bagging of 2025.091 and simple linear regression with 2476.261 (`r -(2025.091 - 2476.261) / 2476.261 * 100%` improvement!). This is based on the fact that we wanted prediction accuracy. If our goal was interpretability of the model, then linear regression and decision tree is far more interpretable than ensemble models.
+We have used linear regression, decision trees, bagging, random forests, and boosting models to predict the usage of Divvy. Ensemble models performed better than simple models like linear regression and decision trees. The RMSE associated with bagging is 2025.091 compared to that of a simple linear regression's 2476.261. We have to acknowledge that RMSE was important as our primary goal was prediction accuracy. If instead our goal was interpretability of the model, then linear regression and decision tree is far more interpretable than complex ensemble models.
 
 
 ## Data Preparation (Optional)
 
 ### Training Data Set
 
-```{r datasets, results = 'hide'}
+```{r train, eval = FALSE}
 trips_2014_Q1Q2 <- read_csv("Divvy_Trips_2014_Q1Q2.csv")
 trips_2014_Q3_07 <- read_csv("Divvy_Trips_2014-Q3-07.csv")
 trips_2014_Q3_0809 <- read_csv("Divvy_Trips_2014-Q3-0809.csv")
@@ -290,20 +292,13 @@ trips_2016_Q3Q4 <- rbind(trips_2016_Q3, trips_2016_Q4)
 trips_2016_Q3Q4$starttime <- as_date(mdy_hms(trips_2016_Q3Q4$starttime))
 trips_2016_Q3Q4$stoptime <- as_date(mdy_hms(trips_2016_Q3Q4$stoptime))
 trips <- rbind(trips, trips_2016_Q3Q4)
-```
 
-Now, in order to get the usage value, we have to first group the number of trips taken by date. There are two options available for date to sum over - start and stop time. There are `r trips$starttime != trips$stoptime` instances where start time are different from the stop time. Since this is only samll percentage, we will use start time to sum together trips.
-
-```{r}
 names(trips)[names(trips) == "starttime"] <- "Date"
 byday <- trips %>% 
   group_by(Date) %>% 
   summarise(Trips = n())
-```
 
-Now, let's take a look at weather data.
 
-```{r, results = 'hide'}
 weather <- read_csv("chicagoweather.csv")
 # convert date
 weather$Date <- as_date(dmy(weather$Date))
@@ -334,7 +329,7 @@ write.csv(train, file = "train.csv", row.names = FALSE)
 
 We do the same transformation to trips and weather data for 2017 to create our testing set.
 
-```{r, results = 'hide'}
+```{r test, eval = FALSE}
 weather_2017 <- read_csv("chicagoweather2017.csv")
 weather_2017$Date <- as_date(dmy(weather_2017$Date))
 weather_2017[which(is.na(weather_2017$Precipitation)),]$Precipitation <- 0
