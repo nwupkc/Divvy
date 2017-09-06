@@ -29,23 +29,23 @@ library('gbm')
 
 To jump right into the Exploratory Data Analysis and Feature Engineering, I have written detailed data preparation at the end.
 
-```{r}
+```{r, results = 'hide'}
 train <- read_csv("train.csv")
 test <- read_csv("test.csv")
-
+```
+```{r}
+# check data
 str(train)
 ```
 
 There are few missing values in our training data set. These are from the days when there were no trips, so we input the adequate values accordingly.
 
+
 ```{r}
-train[which(is.na(train$Trips)),]
 which(is.na(train$Trips))
-train[195, "Wday"] <- "Tues"
-train[196, "Wday"] <- "Wed"
-train[which(is.na(train$Quarter)),]$Quarter <- 1
 train[which(is.na(train$Trips)),]$Trips <- 0
 ```
+
 
 ## Feature Engineering
 
@@ -76,176 +76,182 @@ ggplot(train, aes(Wday, Trips)) + geom_boxplot()
 It seems like usage during week days are little higher than usage during weekends.
 
 ```{r}
-# First we'll look at the relationship between quarter & wday
-ggplot(train, aes(wday, fill = Trips)) + 
-  geom_histogram() + 
-  # I include Sex since we know (a priori) it's a significant predictor
-  facet_grid(.~quarter) + 
-  theme_few()
+train %>% 
+  ggplot(aes(Wday, Trips)) +
+    geom_boxplot() +
+    facet_grid(.~Quarter)
 ```
+
+It seems like the usage for day of the week vary for different quarters.
+
 
 ## Prediction
 
+```{r}
+full <- rbind(train, test)
+train <- full[1:1096,]
+test <- full[1097:1277, ]
+```
+
 ### Linear Regression
 
-I will first use linear regression as a starting point and a benchmark.
+I will first use linear regression as a starting point
 
 ```{r}
 lm.fit <- lm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
 summary(lm.fit)
 ```
 
-The model has found temperature, sea level pressure, wind, precipitation, rain, thunderstorm, and quarter2 to be significant. The model has R-squared of 0.6451 which means 64.51% of the trips are explained by this data. So, how did our model do in terms of prediction? 
+The p-value associated with the F-statistics suggest that we can reject the null hypothesis. This means at least one of the regressors are is associated with the increase in usage. The model has found temperature, sea level pressure, wind, precipitation, rain, thunderstorm, and quarter2 to be significant. R-squared is 0.6451 which means large portion of the variance is explained by our model.
+
+So, how did our model do in terms of prediction? I have used Root Mean Squared Error(RMSE) which is a popular metric for assessing model accuracy. 
 
 ```{r}
-sqrt(mean((test$Trips - predict(lm.fit, test))^2))
+# RMSE
+(RMSE <- sqrt(mean((test$Trips - predict(lm.fit, test))^2)))
 ```
 
-The linear model has a root mean squared error(RMSE) of 2583.261. I have used RMSE for a metric to evaluate the prediction accuracy. Now let's plot the predicted value along with the actual value. 
+The linear model has a root mean squared error(RMSE) of `r RMSE`.
 
-```{r}
-test$yhat <- predict(lm.fit, test)
-graph <- ggplot(test) + 
-  geom_line(aes(Date, Trips)) +
-  geom_point(aes(Date, yhat))
-graph
-```
-
-We might want to have an interaction term between variables wday and quarter as it might be more reasonable to assume that usage differ by weekdays for different quarters and vice versa. 
+We might want to have an interaction term between day of the week and quarter variables as we have confirmed above that the usage differ by weekdays for different quarters.
 
 ```{r}
 lm.fit2 <- lm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 summary(lm.fit2)
-```
-
-Calculating the RMSE of the second model.
-
-```{r}
+#RMSE
 sqrt(mean((test$Trips - predict(lm.fit2, test))^2))
 ```
 
-We did a little better in terms of the prediction. Now, let's see if using all the features is the right way to run the regression. There might be issue of multicollinearity between weather variables as they are likely to be highly correlated.
+We did a little better in terms of the prediction.
+
+One possible problem of the linear regression is non-constant variances in the errors, or heteroscedasticity. The residuals plot has a funnel shape which implies heteroskedasticity.
 
 ```{r}
-regfit.full <- regsubsets(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
-reg.summary <- summary(regfit.full)
-reg.summary$rsq
 par(mfrow=c(2,2))
-plot(reg.summary$rss,xlab="Number of Variables",ylab="RSS",type="l")
-plot(reg.summary$adjr2,xlab="Number of Variables",ylab="Adjusted RSq",type="l")
-which.max(reg.summary$adjr2)
-plot(reg.summary$cp,xlab="Number of Variables",ylab="Cp",type="l")
-which.min(reg.summary$cp)
-plot(reg.summary$bic,xlab="Number of Variables",ylab="BIC",type="l")
-which.min(reg.summary$bic)
+plot(lm.fit2)
 ```
 
-It seems like using all 8 regressors is the right way to go.
+We can solve heteroskedasticity by log transformation. Since we have two trips value with 0, we cannot take log straight away. One way to bypass this problem is to add 1.
+
+```{r}
+lm.fit3 <- lm(log2(Trips+1) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
+par(mfrow=c(2,2))
+plot(lm.fit3)
+
+# RMSE
+sqrt(mean((test$Trips - 2^(predict(lm.fit3, test))-1)^2))
+```
+
+We treated heteroskedasticity, but the prediction result suffered as RMSE score skyrocketed. Another way to treat heteroskedasticy would be using square root.
+
+```{r}
+lm.fit4 <- lm(sqrt(Trips) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
+par(mfrow=c(2,2))
+plot(lm.fit4)
+
+# RMSE
+sqrt(mean((test$Trips - predict(lm.fit4, test)^2)^2))
+```
+
+We have done better than our orignial linear model! We have found a model which is both more accurate and robust.
+
+Now, let's see if using all the features is the right way to run the regression. There might be issue of multicollinearity between weather variables as they are likely to be highly correlated.
+
+```{r}
+library(car)
+vif(lm.fit)
+```
+
+To choose the optimal model with right numbers of varaibles we will consdier Adjusted R-squared, Bayesian information criterion(BIC), and Cp.
+
+```{r}
+regfit.full <- regsubsets(sqrt(Trips) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
+reg.summary <- summary(regfit.full)
+# R-squared statistic always increase with additional variable
+reg.summary$rsq
+# plotting RSS, adjusted R-squared, Cp, and BIC
+par(mfrow=c(2,2))
+plot(reg.summary$rss, xlab="Number of Variables", ylab="RSS", type="l")
+plot(reg.summary$adjr2, xlab="Number of Variables", ylab="Adjusted RSq", type="l")
+which.max(reg.summary$adjr2)
+points(8, reg.summary$adjr2[8], col = "red", cex = 2, pch = 20)
+plot(reg.summary$cp, xlab="Number of Variables", ylab="Cp", type="l")
+which.min(reg.summary$cp)
+points(8, reg.summary$cp[8], col = "red", cex = 2, pch = 20)
+plot(reg.summary$bic, xlab="Number of Variables", ylab="BIC", type="l")
+which.min(reg.summary$bic)
+points(8, reg.summary$bic[8], col = "red", cex = 2, pch = 20)
+```
+
+It is clear that using all 8 regressors is the right way to go.
 
 ### Decision Tree
 
-Next, we will use decision tree to predict the usage.
+Next, we consider the decision trees model to predict the usage.
 
 ```{r}
+# set random seed
 set.seed(11)
 tree.divvy <- tree(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
 summary(tree.divvy)
 par(mfrow=c(1, 1))
+# plot tree
 plot(tree.divvy)
 text(tree.divvy, pretty = 0)
-cv.divvy <- cv.tree(tree.divvy)
-plot(cv.divvy$size, cv.divvy$dev, type='b')
-```
-
-How did we do in terms of prediction?
-
-```{r}
+# RMSE
 sqrt(mean((predict(tree.divvy, newdata = test) - test$Trips)^2))
 ```
 
-We actually did worse than linear model. We can reconcile this issue with using ensemble modeling. Before we move on, let's take a look at the predicted value.
+We did better than linear models. We can do even better.
 
-```{r}
-test$yhat <- predict(tree.divvy, newdata = test)
-graph
-```
-
-### Bagging and Random Forest
-
-```{r}
-combi <- rbind(train, test[,-25])
-train <- combi[1:1284,]
-test <- combi[1285:1465,]
-```
+### Bagging, Random Forests, Boosting
 
 Instead of using decision trees, we can use many trees to predict the usage. Bagging model is a special case of random forest when we use all the features available.
 
 ```{r}
 set.seed(11)
 bag.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry=9, importance=TRUE)
-```
-
-Let's see how we did.
-
-```{r}
 sqrt(mean((predict(bag.divvy, newdata = test) - test$Trips)^2))
 ```
 
-We did a little better than decision tree, but it is still less accurate than linear regression.
-
-```{r}
-test$yhat <- predict(bag.divvy, newdata = test)
-graph
-```
 
 Now we use random forest. The default is using square root of features in this case 3.
 
 ```{r}
 rf.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry=3, importance=TRUE)
+
+# RMSE
+sqrt(mean((predict(rf.divvy, newdata = test) - test$Trips)^2))
+```
+
+Let’s look at relative variable importance by plotting the mean decrease in Gini calculated across all trees.
+
+```{r}
 importance(rf.divvy)
 varImpPlot(rf.divvy)
 ```
 
-Okay, temperature is the most important variable.
+Temperature is the most important variable.
 
-```{r}
-sqrt(mean((predict(rf.divvy, newdata = test) - test$Trips)^2))
-```
-
-We have done a little better.
-
-```{r}
-test$yhat <- predict(rf.divvy, newdata = test)
-graph
-```
-
-### Boosting
-
-Lastly, we use gradient boosting model.
 
 ```{r}
 set.seed(11)
 boost.divvy <- gbm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, distribution="gaussian", n.trees=5000, interaction.depth=4)
 summary(boost.divvy)
-```
-
-RMSE
-
-```{r}
+#RMSE
 sqrt(mean((predict(boost.divvy, newdata = test,n.trees=5000) - test$Trips)^2))
 ```
 
-graph
 
-```{r}
-test$yhat <- predict(boost.divvy, newdata = test, n.trees=5000)
-graph
-```
+
+# Conclusion
+
+
 
 
 ## Data Preparation (Optional)
 
-First I will combine all the trips dataset into one data frame and convert start and stop time into date format.
+### Training Data Set
 
 ```{r datasets, results = 'hide'}
 trips_2014_Q1Q2 <- read_csv("Divvy_Trips_2014_Q1Q2.csv")
@@ -293,7 +299,7 @@ Now, let's take a look at weather data.
 
 ```{r, results = 'hide'}
 weather <- read_csv("chicagoweather.csv")
-# Convert date
+# convert date
 weather$Date <- as_date(dmy(weather$Date))
 
 # "T" stands for "trace", used when precipitation has been detected, but it isn't sufficient to measure meaningfully
@@ -301,7 +307,7 @@ weather$Precipitation[weather$Precipitation == "T"] <- 0
 weather$Precipitation <- as.numeric(weather$Precipitation)
 ```
 ```{r}
-# Treating Events variable
+# treating events variable
 weather[which(is.na(weather$Events)),]$Events <- "None"
 weather$Events <- as.factor(weather$Events)
 levels(weather$Events)
@@ -311,10 +317,15 @@ weather$Events <- gsub("Fog\\r\\t,\\rRain\\r\\t,\\rThunderstorm|Rain\\r\\t,\\rHa
 weather$Events <- as.factor(weather$Events)
 levels(weather$Events)
 
-# Merge and create our training dataset!
+# merge and create our training dataset!
 train <- weather %>% 
   left_join(byday, by = "Date")
+
+# write csv
+write.csv(train, file = "train.csv", row.names = FALSE)
 ```
+
+### Testing Data Set
 
 We do the same transformation to trips and weather data for 2017 to create our testing set.
 
@@ -337,18 +348,20 @@ trips_2017_Q2 <- read_csv("Divvy_Trips_2017_Q2.csv")
 trips_2017 <- rbind(trips_2017_Q1, trips_2017_Q2)
 
 trips_2017$Date <- as_date(mdy_hms(trips_2017$start_time))
-byday3 <- trips_2017 %>% 
+byday2 <- trips_2017 %>% 
   group_by(Date) %>% 
   summarise(Trips = n()) %>% 
   mutate(Wday = wday(Date, label = TRUE))
 
-byday3$Quarter <- 1
-byday3$Quarter[month(byday3$Date) %in% 4:6] <- 2
-byday3$Quarter[month(byday3$Date) %in% 7:9] <- 3
-byday3$Quarter[month(byday3$Date) %in% 10:12] <- 4
-byday3$Quarter <- as.factor(byday3$Quarter)
-levels(byday3$Quarter) <- levels(byday3$Quarter)
+byday2$Quarter <- 1
+byday2$Quarter[month(byday2$Date) %in% 4:6] <- 2
+byday2$Quarter[month(byday2$Date) %in% 7:9] <- 3
+byday2$Quarter[month(byday2$Date) %in% 10:12] <- 4
+byday2$Quarter <- as.factor(byday2$Quarter)
+levels(test$Quarter) <- levels(train$Quarter)
 
 test <- weather_2017 %>% 
-  left_join(byday3, by = "Date")
+  left_join(byday2, by = "Date")
+
+write.csv(test, file = "test.csv", row.names = FALSE)
 ```
