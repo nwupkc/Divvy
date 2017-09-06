@@ -14,94 +14,11 @@ This is a prediction of bicycle sharing usage in the city of Chicago. I have def
 ```r
 # Load packages
 library('tidyverse')
-```
-
-```
-## Loading tidyverse: ggplot2
-## Loading tidyverse: tibble
-## Loading tidyverse: tidyr
-## Loading tidyverse: readr
-## Loading tidyverse: purrr
-## Loading tidyverse: dplyr
-```
-
-```
-## Conflicts with tidy packages ----------------------------------------------
-```
-
-```
-## filter(): dplyr, stats
-## lag():    dplyr, stats
-```
-
-```r
 library('lubridate')
-```
-
-```
-## 
-## Attaching package: 'lubridate'
-```
-
-```
-## The following object is masked from 'package:base':
-## 
-##     date
-```
-
-```r
 library('leaps')
-library('rpart')
+library('tree')
 library('randomForest')
-```
-
-```
-## randomForest 4.6-12
-```
-
-```
-## Type rfNews() to see new features/changes/bug fixes.
-```
-
-```
-## 
-## Attaching package: 'randomForest'
-```
-
-```
-## The following object is masked from 'package:dplyr':
-## 
-##     combine
-```
-
-```
-## The following object is masked from 'package:ggplot2':
-## 
-##     margin
-```
-
-```r
 library('gbm')
-```
-
-```
-## Loading required package: survival
-```
-
-```
-## Loading required package: lattice
-```
-
-```
-## Loading required package: splines
-```
-
-```
-## Loading required package: parallel
-```
-
-```
-## Loaded gbm 2.1.3
 ```
 
 To jump right into the Exploratory Data Analysis and Feature Engineering, I have written detailed data preparation at the end.
@@ -470,11 +387,7 @@ We can solve heteroskedasticity by log transformation. Since we have two trips v
 lm.fit3 <- lm(log2(Trips+1) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 par(mfrow=c(2,2))
 plot(lm.fit3)
-```
 
-![](Divvy_files/figure-html/lm3-1.png)<!-- -->
-
-```r
 # RMSE
 sqrt(mean((test$Trips - 2^(predict(lm.fit3, test))-1)^2))
 ```
@@ -483,6 +396,8 @@ sqrt(mean((test$Trips - 2^(predict(lm.fit3, test))-1)^2))
 ## [1] 2931.344
 ```
 
+![](Divvy_files/figure-html/lm3-1.png)<!-- -->
+
 We treated heteroskedasticity, but the prediction result suffered as RMSE score skyrocketed. Another way to treat heteroskedasticy would be using square root.
 
 
@@ -490,11 +405,7 @@ We treated heteroskedasticity, but the prediction result suffered as RMSE score 
 lm.fit4 <- lm(sqrt(Trips) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 par(mfrow=c(2,2))
 plot(lm.fit4)
-```
 
-![](Divvy_files/figure-html/lm4-1.png)<!-- -->
-
-```r
 # RMSE
 sqrt(mean((test$Trips - predict(lm.fit4, test)^2)^2))
 ```
@@ -502,6 +413,8 @@ sqrt(mean((test$Trips - predict(lm.fit4, test)^2)^2))
 ```
 ## [1] 2417.494
 ```
+
+![](Divvy_files/figure-html/lm4-1.png)<!-- -->
 
 We have done better than our orignial linear model! We have found a model which is both more accurate and robust.
 
@@ -568,168 +481,51 @@ Next, we consider the decision trees model to predict the usage. Among many adva
 ```r
 # set random seed
 set.seed(11)
-tree.divvy <- rpart(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
+tree.divvy <- tree(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
+```
+
+```
+## Warning in tree(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + :
+## NAs introduced by coercion
+```
+
+```r
 summary(tree.divvy)
 ```
 
 ```
-## Call:
-## rpart(formula = Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + 
+## 
+## Regression tree:
+## tree(formula = Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + 
 ##     Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + 
 ##     Events + Wday + Quarter, data = train)
-##   n= 1096 
-## 
-##           CP nsplit rel error    xerror        xstd
-## 1 0.67088023      0 1.0000000 1.0017136 0.028607773
-## 2 0.07537113      1 0.3291198 0.3369209 0.015273293
-## 3 0.04119229      2 0.2537486 0.2613733 0.013747433
-## 4 0.02219536      3 0.2125563 0.2216760 0.010875343
-## 5 0.01429733      4 0.1903610 0.2059812 0.010107363
-## 6 0.01004597      5 0.1760637 0.1918293 0.009159783
-## 7 0.01000000      6 0.1660177 0.1857393 0.008868602
-## 
-## Variable importance
-##     Temperature_Avg       Dew_Point_Avg             Quarter 
-##                  34                  27                  21 
-##              Events Sea_Level_Press_Avg       Precipitation 
-##                   7                   6                   2 
-##            Wind_Avg      Visibility_Avg        Humidity_Avg 
-##                   2                   1                   1 
-## 
-## Node number 1: 1096 observations,    complexity param=0.6708802
-##   mean=8424.686, MSE=3.166741e+07 
-##   left son=2 (597 obs) right son=3 (499 obs)
-##   Primary splits:
-##       Temperature_Avg < 55.5   to the left,  improve=0.67088020, (0 missing)
-##       Dew_Point_Avg   < 38.5   to the left,  improve=0.58322910, (0 missing)
-##       Quarter         splits as  LRRL,       improve=0.47860340, (0 missing)
-##       Events          splits as  RRLR,       improve=0.23099610, (0 missing)
-##       Visibility_Avg  < 8.5    to the left,  improve=0.09851409, (0 missing)
-##   Surrogate splits:
-##       Dew_Point_Avg       < 44.5   to the left,  agree=0.926, adj=0.838, (0 split)
-##       Quarter             splits as  LRRL,       agree=0.849, adj=0.667, (0 split)
-##       Sea_Level_Press_Avg < 30.065 to the right, agree=0.628, adj=0.182, (0 split)
-##       Events              splits as  LRLR,       agree=0.623, adj=0.172, (0 split)
-##       Wind_Avg            < 16.5   to the right, agree=0.579, adj=0.076, (0 split)
-## 
-## Node number 2: 597 observations,    complexity param=0.07537113
-##   mean=4210.712, MSE=8822373 
-##   left son=4 (383 obs) right son=5 (214 obs)
-##   Primary splits:
-##       Temperature_Avg < 42.5   to the left,  improve=0.4966705, (0 missing)
-##       Dew_Point_Avg   < 25.5   to the left,  improve=0.3179411, (0 missing)
-##       Quarter         splits as  LRRR,       improve=0.2447311, (0 missing)
-##       Events          splits as  RRLR,       improve=0.2089466, (0 missing)
-##       Visibility_Avg  < 9.5    to the left,  improve=0.1080491, (0 missing)
-##   Surrogate splits:
-##       Dew_Point_Avg < 31.5   to the left,  agree=0.863, adj=0.617, (0 split)
-##       Quarter       splits as  LRRL,       agree=0.755, adj=0.318, (0 split)
-##       Events        splits as  LRLR,       agree=0.712, adj=0.196, (0 split)
-##       Precipitation < 0.29   to the left,  agree=0.660, adj=0.051, (0 split)
-##       Humidity_Avg  < 54.5   to the right, agree=0.653, adj=0.033, (0 split)
-## 
-## Node number 3: 499 observations,    complexity param=0.04119229
-##   mean=13466.25, MSE=1.23366e+07 
-##   left son=6 (122 obs) right son=7 (377 obs)
-##   Primary splits:
-##       Precipitation   < 0.115  to the right, improve=0.2322433, (0 missing)
-##       Events          splits as  RL-L,       improve=0.2194705, (0 missing)
-##       Temperature_Avg < 63.5   to the left,  improve=0.2126622, (0 missing)
-##       Visibility_Avg  < 9.5    to the left,  improve=0.1824585, (0 missing)
-##       Quarter         splits as  LLRL,       improve=0.1368899, (0 missing)
-##   Surrogate splits:
-##       Events         splits as  RR-L,       agree=0.864, adj=0.443, (0 split)
-##       Visibility_Avg < 9.5    to the left,  agree=0.832, adj=0.311, (0 split)
-##       Humidity_Avg   < 78.5   to the right, agree=0.798, adj=0.172, (0 split)
-##       Wind_Avg       < 30.5   to the right, agree=0.776, adj=0.082, (0 split)
-##       Dew_Point_Avg  < 68.5   to the right, agree=0.770, adj=0.057, (0 split)
-## 
-## Node number 4: 383 observations
-##   mean=2646, MSE=2996830 
-## 
-## Node number 5: 214 observations,    complexity param=0.01004597
-##   mean=7011.107, MSE=7024433 
-##   left son=10 (72 obs) right son=11 (142 obs)
-##   Primary splits:
-##       Precipitation       < 0.005  to the right, improve=0.2319476, (0 missing)
-##       Events              splits as  RLLL,       improve=0.2268580, (0 missing)
-##       Visibility_Avg      < 9.5    to the left,  improve=0.2039593, (0 missing)
-##       Sea_Level_Press_Avg < 30.065 to the left,  improve=0.1798557, (0 missing)
-##       Wind_Avg            < 19     to the right, improve=0.1441252, (0 missing)
-##   Surrogate splits:
-##       Events              splits as  RLLL,       agree=0.916, adj=0.750, (0 split)
-##       Visibility_Avg      < 9.5    to the left,  agree=0.832, adj=0.500, (0 split)
-##       Dew_Point_Avg       < 42.5   to the right, agree=0.766, adj=0.306, (0 split)
-##       Humidity_Avg        < 72.5   to the right, agree=0.743, adj=0.236, (0 split)
-##       Sea_Level_Press_Avg < 29.82  to the left,  agree=0.743, adj=0.236, (0 split)
-## 
-## Node number 6: 122 observations,    complexity param=0.01429733
-##   mean=10490.75, MSE=1.131958e+07 
-##   left son=12 (29 obs) right son=13 (93 obs)
-##   Primary splits:
-##       Temperature_Avg     < 62.5   to the left,  improve=0.3593255, (0 missing)
-##       Dew_Point_Avg       < 57.5   to the left,  improve=0.2489722, (0 missing)
-##       Quarter             splits as  LLRL,       improve=0.1835254, (0 missing)
-##       Humidity_Avg        < 85.5   to the right, improve=0.1615883, (0 missing)
-##       Sea_Level_Press_Avg < 29.69  to the left,  improve=0.1133061, (0 missing)
-##   Surrogate splits:
-##       Dew_Point_Avg       < 57.5   to the left,  agree=0.877, adj=0.483, (0 split)
-##       Humidity_Avg        < 82.5   to the right, agree=0.820, adj=0.241, (0 split)
-##       Quarter             splits as  LRRL,       agree=0.811, adj=0.207, (0 split)
-##       Sea_Level_Press_Avg < 29.635 to the left,  agree=0.795, adj=0.138, (0 split)
-##       Visibility_Avg      < 4.5    to the left,  agree=0.795, adj=0.138, (0 split)
-## 
-## Node number 7: 377 observations,    complexity param=0.02219536
-##   mean=14429.15, MSE=8873454 
-##   left son=14 (141 obs) right son=15 (236 obs)
-##   Primary splits:
-##       Temperature_Avg < 66.5   to the left,  improve=0.23027740, (0 missing)
-##       Dew_Point_Avg   < 52.5   to the left,  improve=0.15319530, (0 missing)
-##       Quarter         splits as  LLRL,       improve=0.11512920, (0 missing)
-##       Events          splits as  RL-L,       improve=0.07965102, (0 missing)
-##       Wind_Avg        < 23.5   to the right, improve=0.07565907, (0 missing)
-##   Surrogate splits:
-##       Dew_Point_Avg       < 52.5   to the left,  agree=0.857, adj=0.617, (0 split)
-##       Quarter             splits as  LRRL,       agree=0.727, adj=0.270, (0 split)
-##       Sea_Level_Press_Avg < 30.065 to the right, agree=0.676, adj=0.135, (0 split)
-##       Humidity_Avg        < 49.5   to the left,  agree=0.663, adj=0.099, (0 split)
-##       Wind_Avg            < 24.5   to the right, agree=0.634, adj=0.021, (0 split)
-## 
-## Node number 10: 72 observations
-##   mean=5218.528, MSE=4856363 
-## 
-## Node number 11: 142 observations
-##   mean=7920.021, MSE=5668312 
-## 
-## Node number 12: 29 observations
-##   mean=6879.138, MSE=5712256 
-## 
-## Node number 13: 93 observations
-##   mean=11616.96, MSE=7732352 
-## 
-## Node number 14: 141 observations
-##   mean=12579.8, MSE=7539395 
-## 
-## Node number 15: 236 observations
-##   mean=15534.06, MSE=6406324
+## Variables actually used in tree construction:
+## [1] "Temperature_Avg" "Precipitation"  
+## Number of terminal nodes:  7 
+## Residual mean deviance:  5291000 = 5.762e+09 / 1089 
+## Distribution of residuals:
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+## -6170.0 -1624.0  -124.5     0.0  1474.0  9455.0
 ```
 
 ```r
 # plot tree
 plot(tree.divvy)
 text(tree.divvy, pretty = 0)
-```
-
-![](Divvy_files/figure-html/unnamed-chunk-1-1.png)<!-- -->
-
-```r
 # RMSE
 sqrt(mean((predict(tree.divvy, newdata = test) - test$Trips)^2))
 ```
 
 ```
+## Warning in pred1.tree(object, tree.matrix(newdata)): NAs introduced by
+## coercion
+```
+
+```
 ## [1] 2340.803
 ```
+
+![](Divvy_files/figure-html/decision trees-1.png)<!-- -->
 
 We did better than linear models. We can do even better by using decision trees as building blocks to create powerful machine learning algorithms.
 
@@ -854,10 +650,9 @@ Boosting works similarly as bagging, but the trees are grown sequentially meanin
 ```r
 set.seed(11)
 boost.divvy <- gbm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, distribution="gaussian", n.trees = 5000, interaction.depth = 4)
+# summary() function produces a relative influence plot and relative influence statistics
 summary(boost.divvy)
 ```
-
-![](Divvy_files/figure-html/boosting-1.png)<!-- -->
 
 ```
 ##                                     var    rel.inf
@@ -874,13 +669,15 @@ summary(boost.divvy)
 ```
 
 ```r
-#RMSE
+# RMSE
 sqrt(mean((predict(boost.divvy, newdata = test,n.trees = 5000) - test$Trips)^2))
 ```
 
 ```
 ## [1] 2132.904
 ```
+
+![](Divvy_files/figure-html/boosting-1.png)<!-- -->
 
 ## Conclusion
 

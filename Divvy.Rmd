@@ -17,12 +17,12 @@ This is a prediction of bicycle sharing usage in the city of Chicago. I have def
 
 ### Load Data
 
-```{r packages, results = 'hide'}
+```{r packages, message = FALSE}
 # Load packages
 library('tidyverse')
 library('lubridate')
 library('leaps')
-library('rpart')
+library('tree')
 library('randomForest')
 library('gbm')
 ```
@@ -50,7 +50,7 @@ train[which(is.na(train$Trips)),]$Trips <- 0
 
 Let's shed more light into what is driving the Divvy usage. First, I will define usage to be the number of trips taken per day.
 
-```{r graph1}
+```{r graph1, fig.show = "hold"}
 ggplot(train, aes(Date, Trips)) + geom_line()
 ```
 
@@ -66,7 +66,7 @@ train$Quarter <- as.factor(train$Quarter)
 
 I will create day of the week variable to see the shorter usage pattern.
 
-```{r graph2}
+```{r graph2, fig.show = "hold"}
 train <- train %>% 
   mutate(Wday = wday(Date, label = TRUE))
 ggplot(train, aes(Wday, Trips)) + geom_boxplot()
@@ -74,7 +74,7 @@ ggplot(train, aes(Wday, Trips)) + geom_boxplot()
 
 It seems like usage during week days are little higher than usage during weekends.
 
-```{r graph3}
+```{r graph3, fig.show = "hold"}
 train %>% 
   ggplot(aes(Wday, Trips)) +
     geom_boxplot() +
@@ -131,14 +131,14 @@ We did a little better in terms of the prediction.
 
 One possible problem of the linear regression is non-constant variances in the errors, or heteroscedasticity. The residuals plot has a funnel shape which implies heteroskedasticity.
 
-```{r graph4}
+```{r graph4, fig.show = "hold"}
 par(mfrow=c(2,2))
 plot(lm.fit2)
 ```
 
 We can solve heteroskedasticity by log transformation. Since we have two trips value with 0, we cannot take log straight away. One way to bypass this problem is to add 1.
 
-```{r lm3}
+```{r lm3, fig.show = "hold"}
 lm.fit3 <- lm(log2(Trips+1) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 par(mfrow=c(2,2))
 plot(lm.fit3)
@@ -149,7 +149,7 @@ sqrt(mean((test$Trips - 2^(predict(lm.fit3, test))-1)^2))
 
 We treated heteroskedasticity, but the prediction result suffered as RMSE score skyrocketed. Another way to treat heteroskedasticy would be using square root.
 
-```{r lm4}
+```{r lm4, fig.show = "hold"}
 lm.fit4 <- lm(sqrt(Trips) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 par(mfrow=c(2,2))
 plot(lm.fit4)
@@ -162,7 +162,7 @@ We have done better than our orignial linear model! We have found a model which 
 
 To choose the optimal model with right numbers of varaibles we will consdier Adjusted R-squared, Bayesian information criterion(BIC), and Cp.
 
-```{r feature selection}
+```{r feature selection, fig.show = "hold"}
 regfit.full <- regsubsets(sqrt(Trips) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 reg.summary <- summary(regfit.full)
 # R-squared statistic always increase with additional variable
@@ -187,10 +187,10 @@ It is clear that using all 8 regressors is the right way to go.
 
 Next, we consider the decision trees model to predict the usage. Among many advantages of decision trees is its high interpretability.
 
-```{r}
+```{r decision trees, fig.show = "hold"}
 # set random seed
 set.seed(11)
-tree.divvy <- rpart(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
+tree.divvy <- tree(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train)
 summary(tree.divvy)
 # plot tree
 plot(tree.divvy)
@@ -236,19 +236,20 @@ sqrt(mean((predict(rf.divvy, newdata = test) - test$Trips)^2))
 
 Let’s look at relative variable importance by plotting the mean decrease in Gini calculated across all trees. Temperature is by far the most important variable.
 
-```{r var imp}
+```{r var imp, fig.show = "hold"}
 importance(rf.divvy)
 varImpPlot(rf.divvy)
 ```
 
 Boosting works similarly as bagging, but the trees are grown sequentially meaning it builds on top of what the previous trees have learned.
 
-```{r boosting}
+```{r boosting, fig.show = "hold"}
 set.seed(11)
 boost.divvy <- gbm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, distribution="gaussian", n.trees = 5000, interaction.depth = 4)
+# summary() function produces a relative influence plot and relative influence statistics
 summary(boost.divvy)
 
-#RMSE
+# RMSE
 sqrt(mean((predict(boost.divvy, newdata = test,n.trees = 5000) - test$Trips)^2))
 ```
 
