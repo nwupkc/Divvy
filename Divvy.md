@@ -137,7 +137,7 @@ ggplot(train, aes(Date, Trips)) + geom_line()
 
 ![](Divvy_files/figure-html/graph1-1.png)<!-- -->
 
-The graph shows strong seasonal pattern. I will create a variable called quarter so that our models can capture this pattern when predicting.
+The graph shows strong seasonal pattern. I will create a variable called quarter to capture this pattern when predicting.
 
 
 ```r
@@ -159,7 +159,7 @@ ggplot(train, aes(Wday, Trips)) + geom_boxplot()
 
 ![](Divvy_files/figure-html/graph2-1.png)<!-- -->
 
-It seems like usage during week days are little higher than usage during weekends.
+It seems like usage during week days are little higher than the usage during weekends.
 
 
 ```r
@@ -173,7 +173,7 @@ train %>%
 
 It seems like the usage for day of the week vary for different quarters.
 
-We add the same feature engineered variables to our test set.
+We add the same additional features to our test set.
 
 
 ```r
@@ -191,7 +191,7 @@ levels(test$Quarter) <- levels(train$Quarter)
 
 ### Linear Regression
 
-I will first use linear regression as a starting point.
+I will first use linear regression as a starting point. While not as fancy as newer models, linear regression has had time to build statistical rigor which newer models do not have.
 
 
 ```r
@@ -240,9 +240,9 @@ summary(lm.fit)
 ## F-statistic: 325.3 on 19 and 1076 DF,  p-value: < 2.2e-16
 ```
 
-The p-value associated with the F-statistics suggest that we can reject the null hypothesis. This means at least one of the regressors are is associated with the increase in usage. The model has found temperature, sea level pressure, wind, precipitation, rain, thunderstorm, and quarter2 to be significant. R-squared is 0.6451 which means large portion of the variance is explained by our model.
+R-squared represents a goodness of fir and it is 0.6451 which means large portion of the variance is explained by our model. The p-value associated with the F-statistics suggest that we can reject the null hypothesis. This means at least one of the regressors are is associated with the increase in usage. The model has found temperature, sea level pressure, wind, precipitation, rain, thunderstorm, and quarter2 to be statistically significant based on the p-values associated with t-statistics. 
 
-So, how did our model do in terms of prediction? I have used Root Mean Squared Error(RMSE) which is a popular metric for assessing model accuracy. 
+So, how did our model do in terms of prediction? I decided to use **root mean squared error**(RMSE) which measures how far the predicted usage differs from the actual usage. RMSE is a popular metric for assessing model accuracy.
 
 
 ```r
@@ -325,16 +325,16 @@ summary(lm.fit2)
 
 ```r
 #RMSE
-sqrt(mean((test$Trips - predict(lm.fit2, test))^2))
+(RMSE <- sqrt(mean((test$Trips - predict(lm.fit2, test))^2)))
 ```
 
 ```
 ## [1] 2453.999
 ```
 
-We did a little better in terms of the prediction.
+Our second linear model has a RMSE of 2453.999.
 
-One possible problem of the linear regression is non-constant variances in the errors, or heteroscedasticity. The residuals plot has a funnel shape which implies heteroskedasticity.
+One possible problem of the linear regression is non-constant variances of errors, or heteroscedasticity. Heteroscedasticity occurs when assumption homoskedasticity (i.e. Var(Ui|Xi) = Var(Ui)) is violated. We can detect heteroskedasticity by identifying a funnel shape in the residuals plot.
 
 
 ```r
@@ -344,16 +344,16 @@ plot(lm.fit2)
 
 ![](Divvy_files/figure-html/graph4-1.png)<!-- -->
 
-We can solve heteroskedasticity by log transformation. Since we have two trips value with 0, we cannot take log straight away. One way to bypass this problem is to add 1.
+We can solve heteroskedasticity by log-transformation. Since we have two trips value with 0, we cannot take log straight away since log(0)=−∞ . One way to bypass this problem is to add 1 (i.e. log(x+1)).
 
 
 ```r
-lm.fit3 <- lm(log2(Trips+1) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
+lm.fit3 <- lm(log(Trips+1) ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday * Quarter, train)
 par(mfrow=c(2,2))
 plot(lm.fit3)
 
 # RMSE
-sqrt(mean((test$Trips - 2^(predict(lm.fit3, test))-1)^2))
+(RMSE <- sqrt(mean((test$Trips - exp(predict(lm.fit3, test))-1)^2)))
 ```
 
 ```
@@ -362,7 +362,7 @@ sqrt(mean((test$Trips - 2^(predict(lm.fit3, test))-1)^2))
 
 ![](Divvy_files/figure-html/lm3-1.png)<!-- -->
 
-We treated heteroskedasticity, but the prediction result suffered as RMSE score skyrocketed. Another way to treat heteroskedasticy would be using square root.
+We treated heteroskedasticity, but the prediction result suffered as RMSE score skyrocketed to 2931.344. Another way to treat heteroskedasticy would be to use square root transformation.
 
 
 ```r
@@ -382,7 +382,9 @@ sqrt(mean((test$Trips - predict(lm.fit4, test)^2)^2))
 
 We have done better than our orignial linear model! We have found a model which is both more accurate and robust.
 
-To choose the optimal model with right numbers of varaibles we will consdier Adjusted R-squared, Bayesian information criterion(BIC), and Cp.
+### Feature Selection
+
+R-squared cannot be used to select among a set of different variables as it will always increase with an additional variable. To choose the optimal model with the right numbers of varaibles we will consdier Adjusted R-squared, Bayesian information criterion(BIC), and Mallow’s Cp all of which adds penalty that increases with more variables.
 
 
 ```r
@@ -400,8 +402,8 @@ reg.summary$rsq
 ```r
 # plotting RSS, adjusted R-squared, Cp, and BIC
 par(mfrow=c(2,2))
-plot(reg.summary$rss, xlab="Number of Variables", ylab="RSS", type="l")
-plot(reg.summary$adjr2, xlab="Number of Variables", ylab="Adjusted RSq", type="l")
+plot(reg.summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l")
+plot(reg.summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted RSq", type = "l")
 which.max(reg.summary$adjr2)
 ```
 
@@ -411,7 +413,7 @@ which.max(reg.summary$adjr2)
 
 ```r
 points(8, reg.summary$adjr2[8], col = "red", cex = 2, pch = 20)
-plot(reg.summary$cp, xlab="Number of Variables", ylab="Cp", type="l")
+plot(reg.summary$cp, xlab = "Number of Variables", ylab = "Cp", type = "l")
 which.min(reg.summary$cp)
 ```
 
@@ -421,7 +423,7 @@ which.min(reg.summary$cp)
 
 ```r
 points(8, reg.summary$cp[8], col = "red", cex = 2, pch = 20)
-plot(reg.summary$bic, xlab="Number of Variables", ylab="BIC", type="l")
+plot(reg.summary$bic, xlab = "Number of Variables", ylab = "BIC", type = "l")
 which.min(reg.summary$bic)
 ```
 
@@ -435,11 +437,11 @@ points(8, reg.summary$bic[8], col = "red", cex = 2, pch = 20)
 
 ![](Divvy_files/figure-html/feature_selection-1.png)<!-- -->
 
-It is clear that using all 8 regressors is the right way to go.
+All three crieria tell us that the best number of feature is 8.
 
 ### Decision Trees
 
-Next, we consider the decision trees model to predict the usage. Among many advantages of decision trees is its high interpretability.
+Next, we consider the decision trees model to predict the usage. Decision tree method involve segmenting predictor region into multiple regions and using the region the observation falls into to make a prediction. Among many advantages of decision trees is its high interpretability.
 
 
 ```r
@@ -491,13 +493,13 @@ sqrt(mean((predict(tree.divvy, newdata = test) - test$Trips)^2))
 
 ![](Divvy_files/figure-html/decision_trees-1.png)<!-- -->
 
-We did better than linear models. We can do even better by using decision trees as building blocks to create powerful machine learning algorithms.
+We did better than linear models. Decision tree is not known for prediction accuracy, but it serves as a building block to create more powerful machine learning algorithms.
 
 ### Ensemble Models
 
-In this section we will consider three ensembles models: Bagging, Random Forests, and Boosting.
+In this section we will consider three ensembles models: Bagging, Random Forests, and Boosting. All these methods combine a large number of decision trees to yield prediction with high accuracy at the cost of loss in interpretation.
 
-We will first convert character vectors to factors so we can use randomForest.
+We will first convert character vectors to factors so we can use randomForest package.
 
 
 ```r
@@ -557,6 +559,7 @@ Instead of using decision trees which suffers from high variance, we can use boo
 ```r
 set.seed(11)
 bag.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry = 9, importance = TRUE)
+
 #RMSE
 sqrt(mean((predict(bag.divvy, newdata = test) - test$Trips)^2))
 ```
@@ -565,13 +568,13 @@ sqrt(mean((predict(bag.divvy, newdata = test) - test$Trips)^2))
 ## [1] 2025.091
 ```
 
-Bagging result shows improved accuracy over a single tree. Bagging model is a special case of random forest when we use all the features available.
+Bagging result shows improved accuracy over a single tree. Bagging model is a special case of random forests when we use all the features available.
 
-Random forests works similarly as bagging but instead decorrelates the individual trees by taking a random sample of predictors when building each tree. The default number of features is square root of the all available features which in this case is 3.
+Random forests works similarly as bagging but instead decorrelates the individual trees by taking a random sample of predictors when building each tree. The default number of features used for each tree is square root of the all available features. In this case it is 3.
 
 
 ```r
-rf.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry=3, importance=TRUE)
+rf.divvy <- randomForest(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, mtry = 3, importance = TRUE)
 
 # RMSE
 sqrt(mean((predict(rf.divvy, newdata = test) - test$Trips)^2))
@@ -608,12 +611,12 @@ varImpPlot(rf.divvy)
 
 ![](Divvy_files/figure-html/varimp-1.png)<!-- -->
 
-Boosting works similarly as bagging, but the trees are grown sequentially meaning it builds on top of what the previous trees have learned.
+Boosting works similarly as bagging, but the trees are grown on top the previous trees using information they have learned. Boosting does not involve sampling as each tree is fit on a modified version of the original data set.
 
 
 ```r
 set.seed(11)
-boost.divvy <- gbm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, distribution="gaussian", n.trees = 5000, interaction.depth = 4)
+boost.divvy <- gbm(Trips ~ Temperature_Avg + Dew_Point_Avg + Humidity_Avg + Sea_Level_Press_Avg + Visibility_Avg + Wind_Avg + Precipitation + Events + Wday + Quarter, train, distribution = "gaussian", n.trees = 5000, interaction.depth = 4)
 # summary() function produces a relative influence plot and relative influence statistics
 summary(boost.divvy)
 ```
@@ -645,7 +648,9 @@ sqrt(mean((predict(boost.divvy, newdata = test,n.trees = 5000) - test$Trips)^2))
 
 # Conclusion
 
-We have used linear regression, decision trees, bagging, random forests, and boosting models to predict the usage of Divvy. Ensemble models performed better than simple models like linear regression and decision trees. The RMSE associated with bagging is 2025.091 compared to that of a simple linear regression's 2476.261. We have to acknowledge that RMSE was important as our primary goal was prediction accuracy. If instead our goal was interpretability of the model, then linear regression and decision tree is far more interpretable than complex ensemble models.
+We have used linear regression, decision trees, bagging, random forests, and boosting models to predict the Divvy usage.Ensemble models performed better than simple models like linear regression and decision trees. The RMSE associated with bagging is 2025.091 compared to a simple linear regression's 2476.261 which is 18% improvement in accuracy.
+
+On a side note, if our goal was interpretability of the model, then linear regression and decision tree is far more interpretable than complex ensemble models. However, reducing RMSE was of utmost importance as our primary goal was prediction accuracy. 
 
 
 ## Data Preparation (Optional)
