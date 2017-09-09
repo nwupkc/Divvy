@@ -6,7 +6,7 @@ Sungwan Kim
 
 # Introduction
 
-This is a prediction of bicycle sharing usage in the city of Chicago. I have defined the usage as the number of trips taken per day. I will use historical trips and weather datasets from 2014 to 2016 to predict the usage for the first half of 2017. I have decided to exclude trips data from 2013 as the number of rides during first few months are noticeably low as Divvy just started out its service in the Windy City.
+This is a prediction of bicycle sharing usage in the city of Chicago. I have defined the usage as the number of trips taken per day. I will use historical trips and weather datasets from 2014 to 2016 to predict the usage for the first half of 2017. I have decided to exclude trips data from 2013 since the number of rides during first few months are noticeably low as Divvy just started out its service in the Windy City.
 
 ### Load Data
 
@@ -21,7 +21,7 @@ library('randomForest')
 library('gbm')
 ```
 
-To jump right into the Exploratory Data Analysis and Feature Engineering, I have written detailed data preparation at the end.
+To jump right into the Exploratory Data Analysis and Feature Engineering, I have written a detailed data preparation at the end.
 
 
 ```r
@@ -110,7 +110,7 @@ str(train)
 ##   ..- attr(*, "class")= chr "col_spec"
 ```
 
-There are few missing values in our training data set. These are from the days when there were no trips, so we input the adequate values accordingly.
+There are a few missing values in our training data set. These are from the days when there were no trips, so we input the adequate values accordingly.
 
 
 ```r
@@ -137,7 +137,7 @@ ggplot(train, aes(Date, Trips)) + geom_line()
 
 ![](Divvy_files/figure-html/graph1-1.png)<!-- -->
 
-The graph shows strong seasonal pattern. I will create a variable called quarter to capture this pattern when predicting.
+The graph shows a strong seasonal pattern. I will create a variable called quarter to capture this pattern when predicting.
 
 
 ```r
@@ -148,7 +148,7 @@ train$Quarter[month(train$Date) %in% 10:12] <- 4
 train$Quarter <- as.factor(train$Quarter)
 ```
 
-I will create day of the week variable to see the shorter usage pattern.
+I will create the 'day of the week' variable to see the shorter usage pattern.
 
 
 ```r
@@ -159,7 +159,7 @@ ggplot(train, aes(Wday, Trips)) + geom_boxplot()
 
 ![](Divvy_files/figure-html/graph2-1.png)<!-- -->
 
-It seems like usage during week days are little higher than the usage during weekends.
+It seems like usage during week days are a little higher than the usage during weekends.
 
 
 ```r
@@ -171,7 +171,7 @@ train %>%
 
 ![](Divvy_files/figure-html/graph3-1.png)<!-- -->
 
-It seems like the usage for day of the week vary for different quarters.
+It also seems like the usage for day of the week vary for different quarters.
 
 We add the same additional features to our test set.
 
@@ -191,7 +191,7 @@ levels(test$Quarter) <- levels(train$Quarter)
 
 ### Linear Regression
 
-I will first use linear regression as a starting point. While not as fancy as newer models, linear regression has had time to build statistical rigor which newer models do not have.
+I will first use linear regression as a starting point. While not as fancy as the newer models, linear regression has had time to build statistical rigor, which newer models do not have.
 
 
 ```r
@@ -240,9 +240,9 @@ summary(lm.fit)
 ## F-statistic: 325.3 on 19 and 1076 DF,  p-value: < 2.2e-16
 ```
 
-R-squared represents a goodness of fir and it is 0.6451 which means large portion of the variance is explained by our model. The p-value associated with the F-statistics suggest that we can reject the null hypothesis. This means at least one of the regressors are is associated with the increase in usage. The model has found temperature, sea level pressure, wind, precipitation, rain, thunderstorm, and quarter2 to be statistically significant based on the p-values associated with t-statistics. 
+R-squared represents a goodness of fit and it is 0.6451, which means large portion of the variance is explained by our model. The p-value associated with the F-statistics suggests that we can reject the null hypothesis. This means at least one of the regressors are is associated with the increase in usage. The model has found temperature, sea level pressure, wind, precipitation, rain, thunderstorm, and quarter to be statistically significant based on the p-values associated with the t-statistics. 
 
-So, how did our model do in terms of prediction? I decided to use **root mean squared error**(RMSE) which measures how far the predicted usage differs from the actual usage. RMSE is a popular metric for assessing model accuracy.
+So, how did our model do in terms of prediction? I decided to use the **root mean squared error**(RMSE), which measures how far the predicted usage differs from the actual usage. RMSE is a popular metric for assessing model accuracy.
 
 
 ```r
@@ -256,7 +256,7 @@ So, how did our model do in terms of prediction? I decided to use **root mean sq
 
 The linear model has a root mean squared error(RMSE) of 2476.261.
 
-We might want to have an interaction term between day of the week and quarter variables as we have confirmed above that the usage differ by weekdays for different quarters.
+We might want to have an interaction term between day of the week and quarter variables, as we have confirmed above that the usage differs by weekdays for different quarters.
 
 
 ```r
@@ -334,7 +334,7 @@ summary(lm.fit2)
 
 Our second linear model has a RMSE of 2453.999.
 
-One possible problem of the linear regression is non-constant variances of errors, or heteroscedasticity. Heteroscedasticity occurs when assumption homoskedasticity (i.e. Var(Ui|Xi) = Var(Ui)) is violated. We can detect heteroskedasticity by identifying a funnel shape in the residuals plot.
+One possible problem of the linear regression is the non-constant variances of errors, or heteroscedasticity. Heteroscedasticity occurs when the assumption homoskedasticity (i.e. Var(Ui|Xi) = Var(Ui)) is violated. We can detect heteroskedasticity by identifying a funnel shape in the residuals plot.
 
 
 ```r
@@ -384,7 +384,7 @@ We have done better than our orignial linear model! We have found a model which 
 
 ### Feature Selection
 
-R-squared cannot be used to select among a set of different variables as it will always increase with an additional variable. To choose the optimal model with the right numbers of varaibles we will consdier Adjusted R-squared, Bayesian information criterion(BIC), and Mallow’s Cp all of which adds penalty that increases with more variables.
+R-squared cannot be used to select among a set of different variables, as it will always increase with an additional variable. To choose the optimal model with the right numbers of variables we will consider Adjusted R-squared, Bayesian information criterion(BIC), and Mallow’s Cp, all of which adds penalty that increases with more variables.
 
 
 ```r
@@ -437,11 +437,11 @@ points(8, reg.summary$bic[8], col = "red", cex = 2, pch = 20)
 
 ![](Divvy_files/figure-html/feature_selection-1.png)<!-- -->
 
-All three crieria tell us that the best number of feature is 8.
+All three criteria tell us that the best number of feature is 8.
 
 ### Decision Trees
 
-Next, we consider the decision trees model to predict the usage. Decision tree method involve segmenting predictor region into multiple regions and using the region the observation falls into to make a prediction. Among many advantages of decision trees is its high interpretability.
+Next, we consider the decision trees model to predict the usage. Decision tree method involves segmenting predictor region into multiple regions and using the region that the observation falls into to make a prediction. Among many advantages of decision trees is its high interpretability.
 
 
 ```r
@@ -493,13 +493,13 @@ sqrt(mean((predict(tree.divvy, newdata = test) - test$Trips)^2))
 
 ![](Divvy_files/figure-html/decision_trees-1.png)<!-- -->
 
-We did better than linear models. Decision tree is not known for prediction accuracy, but it serves as a building block to create more powerful machine learning algorithms.
+We did better than linear models. Decision tree is not known for its prediction accuracy, but it serves as a building block to create more powerful machine learning algorithms.
 
 ### Ensemble Models
 
-In this section we will consider three ensembles models: Bagging, Random Forests, and Boosting. All these methods combine a large number of decision trees to yield prediction with high accuracy at the cost of loss in interpretation.
+In this section, we will consider three ensembles models: Bagging, Random Forests, and Boosting. All these methods combine a large number of decision trees to yield prediction with high accuracy at the cost of loss in interpretation.
 
-We will first convert character vectors to factors so we can use randomForest package.
+We will first convert character vectors to factors, so we can use randomForest package.
 
 
 ```r
@@ -553,7 +553,7 @@ train$Events <- as.factor(train$Events)
 test$Events <- as.factor(test$Events)
 ```
 
-Instead of using decision trees which suffers from high variance, we can use bootstrap aggregation or bagging to reduce the variance of a statistical learning method. Bagging takes repeated samples from our training set, grows hundreds of trees and averages all the predictions.
+Instead of using decision trees, which suffers from high variance, we can use bootstrap aggregation or bagging to reduce the variance of a statistical learning method. Bagging takes repeated samples from our training set, grows hundreds of trees and averages all the predictions.
 
 
 ```r
@@ -570,7 +570,7 @@ sqrt(mean((predict(bag.divvy, newdata = test) - test$Trips)^2))
 
 Bagging result shows improved accuracy over a single tree. Bagging model is a special case of random forests when we use all the features available.
 
-Random forests works similarly as bagging but instead decorrelates the individual trees by taking a random sample of predictors when building each tree. The default number of features used for each tree is square root of the all available features. In this case it is 3.
+Random forests work similarly as bagging, but instead decorrelates the individual trees by taking a random sample of predictors when building each tree. The default number of features used for each tree is square root of the all available features. In this case it is 3.
 
 
 ```r
@@ -611,7 +611,7 @@ varImpPlot(rf.divvy)
 
 ![](Divvy_files/figure-html/varimp-1.png)<!-- -->
 
-Boosting works similarly as bagging, but the trees are grown on top the previous trees using information they have learned. Boosting does not involve sampling as each tree is fit on a modified version of the original data set.
+Boosting works similarly as bagging, but the trees are grown on top the previous trees using information they have learned. Boosting does not involve sampling, as each tree is fit on a modified version of the original data set.
 
 
 ```r
@@ -648,9 +648,9 @@ sqrt(mean((predict(boost.divvy, newdata = test,n.trees = 5000) - test$Trips)^2))
 
 # Conclusion
 
-We have used linear regression, decision trees, bagging, random forests, and boosting models to predict the Divvy usage.Ensemble models performed better than simple models like linear regression and decision trees. The RMSE associated with bagging is 2025.091 compared to a simple linear regression's 2476.261 which is 18% improvement in accuracy.
+We have used linear regression, decision trees, bagging, random forests, and boosting models to predict the Divvy usage. Ensemble models performed better than simple models like linear regression and decision trees. The RMSE associated with bagging is 2025.091 compared to a simple linear regression's 2476.261, which is 18% improvement in accuracy. The implication of this study is that given the weather data, Divvy can predict the upcoming usage with reasonable accuracy and plan for the bike stocks accordingly.
 
-On a side note, if our goal was interpretability of the model, then linear regression and decision tree is far more interpretable than complex ensemble models. However, reducing RMSE was of utmost importance as our primary goal was prediction accuracy. 
+On a side note, if our goal was interpretability of the model, then the linear regression and decision tree is far more interpretable than complex ensemble models. However, reducing RMSE was of utmost importance as our primary goal was prediction accuracy. 
 
 
 ## Data Preparation (Optional)
